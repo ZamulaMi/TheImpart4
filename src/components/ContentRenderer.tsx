@@ -11,6 +11,7 @@ import {
   ZoomIn,
   X,
 } from 'lucide-react';
+import { markdownToHtml } from '../utils/editorConverter';
 
 interface ContentRendererProps {
   content: string;
@@ -566,10 +567,11 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content }) => 
   const isHtml = /<(p|h[1-6]|table|blockquote|ul|ol|figure|div|mark)[^>]*>/i.test(content);
 
   if (isHtml) {
+    const processedHtml = markdownToHtml(content);
     return (
       <div className="article-rendered-html space-y-6 text-neutral-800 leading-relaxed font-serif text-base sm:text-lg">
         <div
-          dangerouslySetInnerHTML={{ __html: content }}
+          dangerouslySetInnerHTML={{ __html: processedHtml }}
           onClick={(e) => {
             const target = e.target as HTMLElement;
 

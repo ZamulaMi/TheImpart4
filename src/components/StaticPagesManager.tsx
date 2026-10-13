@@ -98,21 +98,20 @@ export const StaticPagesManager: React.FC<StaticPagesManagerProps> = ({
     }
   };
 
+  const [showResetModal, setShowResetModal] = useState(false);
+
   const handleResetToDefault = () => {
-    if (
-      window.confirm(
-        `Відновити стандартний текст для сторінки «${
-          selectedPageId === 'about' ? 'Про проєкт' : 'Контакти'
-        }»? Незбережені зміни буде втрачено.`
-      )
-    ) {
-      setFormData((prev) => ({
-        ...prev,
-        [selectedPageId]: { ...DEFAULT_PAGES_DATA[selectedPageId] },
-      }));
-      setSuccessMsg('Стандартний зміст відновлено. Не забудьте натиснути «Зберегти зміни».');
-      setTimeout(() => setSuccessMsg(null), 3000);
-    }
+    setShowResetModal(true);
+  };
+
+  const handleConfirmReset = () => {
+    setFormData((prev) => ({
+      ...prev,
+      [selectedPageId]: { ...DEFAULT_PAGES_DATA[selectedPageId] },
+    }));
+    setShowResetModal(false);
+    setSuccessMsg('Стандартний зміст відновлено. Не забудьте натиснути «Зберегти зміни».');
+    setTimeout(() => setSuccessMsg(null), 3000);
   };
 
   const titleVal = langTab === 'en' ? currentPage.titleEn : currentPage.title;
@@ -441,6 +440,47 @@ export const StaticPagesManager: React.FC<StaticPagesManagerProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Модальне вікно підтвердження відновлення стандартного змісту */}
+      {showResetModal && (
+        <div
+          onClick={() => setShowResetModal(false)}
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 border border-neutral-200"
+          >
+            <div className="flex items-center gap-3 text-amber-600 mb-3">
+              <RotateCcw className="w-5 h-5 shrink-0" />
+              <h3 className="font-semibold text-base text-neutral-900">
+                Відновити стандартний зміст?
+              </h3>
+            </div>
+            <p className="text-xs sm:text-sm text-neutral-600 mb-6 leading-relaxed">
+              Ви збираєтеся замінити поточний текст сторінки «
+              <strong>{selectedPageId === 'about' ? 'Про проєкт' : 'Контакти'}</strong>» на
+              стандартний редакційний шаблон. Усі незбережені зміни буде втрачено.
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-100">
+              <button
+                type="button"
+                onClick={() => setShowResetModal(false)}
+                className="px-4 py-2 text-xs font-medium text-neutral-600 hover:bg-neutral-100 rounded-lg cursor-pointer"
+              >
+                Скасувати
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReset}
+                className="px-4 py-2 text-xs font-medium bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-colors cursor-pointer"
+              >
+                Відновити стандарт
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

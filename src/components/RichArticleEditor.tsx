@@ -55,10 +55,11 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
   articleId = 'default',
 }) => {
   const visualEditorRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isInternalChangeRef = useRef(false);
 
-  // Режим відображення: 'visual' (WYSIWYG за замовчуванням), 'split' (паралельний), 'code' (розмітка), 'preview' (чистий перегляд)
+  // Режим відображення: 'visual' (WYSIWYG), 'split' (паралельний), 'code' (розмітка), 'preview' (чистий перегляд)
   const [viewMode, setViewMode] = useState<'visual' | 'split' | 'code' | 'preview'>('visual');
 
   // Історія дій для Undo / Redo
@@ -100,7 +101,27 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
   const [showVideoModal, setShowVideoModal] = useState(false);
   const [videoUrl, setVideoUrl] = useState('');
 
-  // 1. Ініціалізація та синхронізація вмісту візуального редактора
+  // 1. Автоматичне закриття випадаючих меню при кліку за їх межами або Esc
+  useEffect(() => {
+    if (!activeDropdown) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('.editor-dropdown-container')) {
+        setActiveDropdown(null);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setActiveDropdown(null);
+    };
+    document.addEventListener('pointerdown', handleClickOutside);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeDropdown]);
+
+  // 2. Ініціалізація та синхронізація вмісту візуального редактора
   useEffect(() => {
     if (!visualEditorRef.current) return;
     if (isInternalChangeRef.current) {
@@ -114,7 +135,7 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
     }
   }, [value, viewMode]);
 
-  // 2. Перевірка наявності автозбереженої чернетки при відкритті
+  // 3. Перевірка наявності автозбереженої чернетки при відкритті
   useEffect(() => {
     try {
       const savedDraft = localStorage.getItem(storageKey);
@@ -128,7 +149,7 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
     } catch {}
   }, [storageKey]);
 
-  // 3. Автозбереження кожні 2 секунди після припинення вводу
+  // 4. Автозбереження кожні 1.5 секунди після припинення вводу
   const triggerAutoSave = useCallback(
     (newContent: string) => {
       setAutoSaveStatus('Збереження...');
@@ -154,7 +175,7 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
     [storageKey]
   );
 
-  // 4. Оновлення історії та виклик onChange
+  // 5. Оновлення історії та виклик onChange
   const pushToHistoryAndEmit = (newVal: string) => {
     isInternalChangeRef.current = true;
     onChange(newVal);
@@ -162,14 +183,13 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
 
     setHistory((prev) => {
       const sliced = prev.slice(0, historyIndex + 1);
-      // Ліміт історії: 40 кроків
-      if (sliced.length > 40) sliced.shift();
+      if (sliced.length > 50) sliced.shift();
       return [...sliced, newVal];
     });
     setHistoryIndex((prev) => prev + 1);
   };
 
-  // 5. Відновлення чернетки
+  // 6. Відновлення чернетки
   const handleRestoreDraft = () => {
     try {
       const savedDraft = localStorage.getItem(storageKey);
@@ -178,7 +198,7 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
         if (parsed.content) {
           pushToHistoryAndEmit(parsed.content);
           if (visualEditorRef.current) {
-            visualEditorRef.current.innerHTML = parsed.content;
+            visualEditorRef.current.innerHTML = markdownToHtml(parsed.content);
           }
         }
       }
@@ -193,7 +213,7 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
     setHasDraftNotice(false);
   };
 
-  // 6. Undo / Redo
+  // 7. Undo / Redo
   const handleUndo = () => {
     if (historyIndex > 0) {
       const targetIndex = historyIndex - 1;
@@ -220,16 +240,20 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
     }
   };
 
-  // 7. Збереження поточного виділення (Selection Range)
+  // 8. Надійне збереження та відновлення виділення (Selection Range)
   const saveSelection = () => {
     const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0) {
-      savedRangeRef.current = sel.getRangeAt(0).cloneRange();
+    if (sel && sel.rangeCount > 0 && visualEditorRef.current) {
+      const range = sel.getRangeAt(0);
+      const common = range.commonAncestorContainer;
+      if (visualEditorRef.current.contains(common)) {
+        savedRangeRef.current = range.cloneRange();
+      }
     }
   };
 
   const restoreSelection = () => {
-    if (!savedRangeRef.current) return;
+    if (!savedRangeRef.current || !visualEditorRef.current) return;
     const sel = window.getSelection();
     if (sel) {
       sel.removeAllRanges();
@@ -237,70 +261,218 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
     }
   };
 
-  // 8. Виконання візуальних команд форматування прямо в editor (WYSIWYG)
-  const executeCommand = (command: string, value: string | undefined = undefined) => {
-    if (visualEditorRef.current) {
-      visualEditorRef.current.focus();
-    }
-    restoreSelection();
-    document.execCommand(command, false, value);
-    if (visualEditorRef.current) {
-      const html = visualEditorRef.current.innerHTML;
-      pushToHistoryAndEmit(html);
-    }
+  // 9. Допоміжна функція для обгортання тексту в режимі Коду (Textarea)
+  const wrapSelectionInTextarea = (prefix: string, suffix: string = '', defaultText: string = '') => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const text = ta.value;
+    const selected = text.slice(start, end) || defaultText;
+    const replacement = prefix + selected + suffix;
+    const newVal = text.slice(0, start) + replacement + text.slice(end);
+    pushToHistoryAndEmit(newVal);
+    setTimeout(() => {
+      ta.focus();
+      ta.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
+    }, 0);
   };
 
-  // 9. Вставка візуального HTML елемента на місце курсора
-  const insertVisualHtml = (htmlSnippet: string) => {
-    if (visualEditorRef.current) {
-      visualEditorRef.current.focus();
+  // 10. Виконання команд форматування (WYSIWYG + Code fallback)
+  const executeCommand = (command: string, value: string | undefined = undefined) => {
+    if (viewMode === 'code') {
+      if (command === 'bold') wrapSelectionInTextarea('**', '**', 'жирний текст');
+      else if (command === 'italic') wrapSelectionInTextarea('*', '*', 'курсив');
+      else if (command === 'underline') wrapSelectionInTextarea('<u>', '</u>', 'підкреслений текст');
+      else if (command === 'strikeThrough') wrapSelectionInTextarea('~~', '~~', 'закреслений текст');
+      else if (command === 'insertUnorderedList') wrapSelectionInTextarea('- ', '', 'Елемент списку');
+      else if (command === 'insertOrderedList') wrapSelectionInTextarea('1. ', '', 'Елемент списку');
+      return;
     }
+
+    if (!visualEditorRef.current) return;
+    restoreSelection();
+    try {
+      document.execCommand(command, false, value);
+    } catch {}
+
+    const html = visualEditorRef.current.innerHTML;
+    pushToHistoryAndEmit(html);
+  };
+
+  // 11. Надійна вставка блокових елементів (Callout, Таблиця, Медіа, Розділювач)
+  const insertBlockElement = (htmlSnippet: string) => {
+    if (!visualEditorRef.current) return;
     restoreSelection();
 
     const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) {
-      if (visualEditorRef.current) {
-        visualEditorRef.current.innerHTML += htmlSnippet;
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlSnippet.trim();
+    const targetEl = tempDiv.firstElementChild || tempDiv;
+
+    if (!sel || sel.rangeCount === 0 || !visualEditorRef.current.contains(sel.anchorNode)) {
+      visualEditorRef.current.appendChild(targetEl);
+      const p = document.createElement('p');
+      p.innerHTML = '<br/>';
+      visualEditorRef.current.appendChild(p);
+      pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
+      return;
+    }
+
+    const range = sel.getRangeAt(0);
+
+    // Шукаємо батьківський блоковий елемент всередині visualEditorRef
+    let block: HTMLElement | null = null;
+    let curr: Node | null = range.startContainer;
+    while (curr && curr !== visualEditorRef.current) {
+      if (curr.nodeType === Node.ELEMENT_NODE) {
+        block = curr as HTMLElement;
+        if (block.parentNode === visualEditorRef.current) break;
+      }
+      curr = curr.parentNode;
+    }
+
+    const nextP = document.createElement('p');
+    nextP.innerHTML = '<br/>';
+
+    if (block && block.parentNode === visualEditorRef.current) {
+      // Якщо це порожній абзац, замінюємо його
+      if (block.tagName.toLowerCase() === 'p' && (!block.textContent || !block.textContent.trim())) {
+        visualEditorRef.current.replaceChild(targetEl, block);
+        targetEl.after(nextP);
+      } else {
+        block.after(targetEl);
+        targetEl.after(nextP);
+      }
+    } else {
+      range.deleteContents();
+      range.insertNode(targetEl);
+      targetEl.after(nextP);
+    }
+
+    // Встановлюємо курсор у наступний порожній абзац
+    const newRange = document.createRange();
+    newRange.setStart(nextP, 0);
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+    savedRangeRef.current = newRange.cloneRange();
+
+    pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
+  };
+
+  // 12. Надійне перетворення блоків (Заголовки H1, H2, H3, звичайний абзац P)
+  const handleFormatHeading = (tag: 'h2' | 'h3' | 'h4' | 'p') => {
+    setActiveDropdown(null);
+
+    if (viewMode === 'code') {
+      if (tag === 'h2') wrapSelectionInTextarea('## ', '', 'Заголовок');
+      else if (tag === 'h3') wrapSelectionInTextarea('### ', '', 'Підзаголовок');
+      else if (tag === 'h4') wrapSelectionInTextarea('#### ', '', 'Дрібний заголовок');
+      else wrapSelectionInTextarea('\n\n', '\n\n', 'Текст абзацу');
+      return;
+    }
+
+    if (!visualEditorRef.current) return;
+    restoreSelection();
+
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !visualEditorRef.current.contains(sel.anchorNode)) {
+      visualEditorRef.current.focus();
+      return;
+    }
+
+    const range = sel.getRangeAt(0);
+
+    // Знаходимо найближчий блоковий контейнер
+    let blockNode: HTMLElement | null = null;
+    let curr: Node | null = range.startContainer;
+    while (curr && curr !== visualEditorRef.current) {
+      if (curr.nodeType === Node.ELEMENT_NODE) {
+        const el = curr as HTMLElement;
+        const tagName = el.tagName.toLowerCase();
+        if (['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'div'].includes(tagName)) {
+          blockNode = el;
+          break;
+        }
+      }
+      curr = curr.parentNode;
+    }
+
+    if (blockNode && visualEditorRef.current.contains(blockNode)) {
+      // Замінюємо існуючий блок новим елементом потрібного тегу
+      const newEl = document.createElement(tag);
+      while (blockNode.firstChild) {
+        newEl.appendChild(blockNode.firstChild);
+      }
+      blockNode.parentNode?.replaceChild(newEl, blockNode);
+
+      // Встановлюємо курсор у кінець новоствореного блоку
+      const newRange = document.createRange();
+      newRange.selectNodeContents(newEl);
+      newRange.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(newRange);
+      savedRangeRef.current = newRange.cloneRange();
+    } else {
+      // Якщо текст був безпосередньо у visualEditorRef
+      let success = false;
+      try {
+        success = document.execCommand('formatBlock', false, `<${tag.toUpperCase()}>`);
+      } catch {}
+      if (!success) {
+        try {
+          success = document.execCommand('formatBlock', false, tag);
+        } catch {}
+      }
+      if (!success) {
+        const newEl = document.createElement(tag);
+        newEl.appendChild(range.extractContents());
+        range.insertNode(newEl);
+      }
+    }
+
+    pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
+  };
+
+  // 13. Застосування та зняття хайлайтера (Маркер)
+  const handleApplyHighlight = (color: string | null) => {
+    setActiveDropdown(null);
+
+    if (viewMode === 'code') {
+      if (color) wrapSelectionInTextarea(`[hl:${color}]`, `[/hl]`, 'виділений текст');
+      return;
+    }
+
+    if (!visualEditorRef.current) return;
+    restoreSelection();
+
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !visualEditorRef.current.contains(sel.anchorNode)) return;
+
+    // Перевіряємо, чи виділення вже знаходиться всередині тегу <mark>
+    let markEl: HTMLElement | null = null;
+    let node: Node | null = sel.anchorNode;
+    while (node && node !== visualEditorRef.current) {
+      if (node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).tagName.toLowerCase() === 'mark') {
+        markEl = node as HTMLElement;
+        break;
+      }
+      node = node.parentNode;
+    }
+
+    if (!color) {
+      // Зняти виділення
+      if (markEl && markEl.parentNode) {
+        while (markEl.firstChild) {
+          markEl.parentNode.insertBefore(markEl.firstChild, markEl);
+        }
+        markEl.remove();
         pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
       }
       return;
     }
 
-    const range = sel.getRangeAt(0);
-    range.deleteContents();
-
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = htmlSnippet;
-    const frag = document.createDocumentFragment();
-    let node: Node | null;
-    let lastNode: Node | null = null;
-    while ((node = tempDiv.firstChild)) {
-      lastNode = frag.appendChild(node);
-    }
-    range.insertNode(frag);
-
-    // Ставимо курсор після вставленого елемента
-    if (lastNode) {
-      const newRange = document.createRange();
-      newRange.setStartAfter(lastNode);
-      newRange.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(newRange);
-    }
-
-    if (visualEditorRef.current) {
-      pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
-    }
-  };
-
-  // 10. Форматування блоку (Заголовки H1, H2, H3, Paragraph)
-  const handleFormatHeading = (tag: 'h2' | 'h3' | 'h4' | 'p') => {
-    executeCommand('formatBlock', `<${tag}>`);
-    setActiveDropdown(null);
-  };
-
-  // 11. Застосування хайлайтера (Маркер)
-  const handleApplyHighlight = (color: string) => {
     const bgColors: Record<string, string> = {
       yellow: '#fef08a',
       green: '#a7f3d0',
@@ -311,43 +483,173 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
     };
     const bg = bgColors[color] || '#fef08a';
 
-    const sel = window.getSelection();
-    const selectedText = sel ? sel.toString() : '';
+    if (markEl) {
+      markEl.className = `hl-${color}`;
+      markEl.style.backgroundColor = bg;
+      pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
+      return;
+    }
+
+    const range = sel.getRangeAt(0);
+    const selectedText = range.toString() || (savedRangeRef.current ? savedRangeRef.current.toString() : '');
+    const mark = document.createElement('mark');
+    mark.className = `hl-${color}`;
+    mark.style.backgroundColor = bg;
+    mark.style.padding = '2px 5px';
+    mark.style.borderRadius = '3px';
 
     if (selectedText) {
-      insertVisualHtml(
-        `<mark class="hl-${color}" style="background-color: ${bg}; padding: 2px 5px; border-radius: 3px;">${selectedText}</mark>`
-      );
+      mark.appendChild(range.extractContents());
+      range.insertNode(mark);
     } else {
-      insertVisualHtml(
-        `<mark class="hl-${color}" style="background-color: ${bg}; padding: 2px 5px; border-radius: 3px;">виділений текст</mark>&nbsp;`
-      );
+      mark.textContent = 'виділений текст';
+      range.insertNode(mark);
     }
-    setActiveDropdown(null);
+
+    const newRange = document.createRange();
+    newRange.setStartAfter(mark);
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+    savedRangeRef.current = newRange.cloneRange();
+
+    pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
   };
 
-  // 12. Застосування кольору шрифту
-  const handleApplyColor = (colorHex: string) => {
-    executeCommand('foreColor', colorHex);
+  // 14. Застосування та скидання кольору тексту
+  const handleApplyColor = (colorHex: string | null) => {
     setActiveDropdown(null);
+    if (viewMode === 'code') {
+      if (colorHex) wrapSelectionInTextarea(`[color:${colorHex}]`, `[/color]`, 'кольоровий текст');
+      return;
+    }
+
+    if (!visualEditorRef.current) return;
+    restoreSelection();
+
+    if (!colorHex) {
+      document.execCommand('foreColor', false, '#111827');
+    } else {
+      document.execCommand('foreColor', false, colorHex);
+    }
+
+    pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
   };
 
-  // 13. Застосування стилю шрифту
-  const handleApplyFont = (fontFamily: string) => {
+  // 15. Застосування стилю шрифту
+  const handleApplyFont = (fontFamily: string | null, fontType: 'serif' | 'sans' | 'mono' | 'default') => {
+    setActiveDropdown(null);
+    if (viewMode === 'code') {
+      if (fontType !== 'default') wrapSelectionInTextarea(`[font:${fontType}]`, `[/font]`, 'текст шрифтом');
+      return;
+    }
+
+    if (!visualEditorRef.current) return;
+    restoreSelection();
+
     const sel = window.getSelection();
-    const selectedText = sel ? sel.toString() : '';
-    const span = `<span style="font-family: ${fontFamily};">${selectedText || 'Текст шрифтом'}</span>&nbsp;`;
-    insertVisualHtml(span);
-    setActiveDropdown(null);
+    if (!sel || sel.rangeCount === 0 || !visualEditorRef.current.contains(sel.anchorNode)) return;
+
+    if (!fontFamily) {
+      document.execCommand('fontName', false, 'inherit');
+      pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
+      return;
+    }
+
+    const range = sel.getRangeAt(0);
+    const selectedText = range.toString() || (savedRangeRef.current ? savedRangeRef.current.toString() : '');
+    const span = document.createElement('span');
+    span.style.fontFamily = fontFamily;
+
+    if (selectedText) {
+      span.appendChild(range.extractContents());
+      range.insertNode(span);
+    } else {
+      span.textContent = 'Текст шрифтом';
+      range.insertNode(span);
+    }
+
+    const newRange = document.createRange();
+    newRange.setStartAfter(span);
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+    savedRangeRef.current = newRange.cloneRange();
+
+    pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
   };
 
-  // 14. Застосування / Скасування Telegram спойлера (Toggle Spoiler)
+  // 16. Застосування / Скасування моноширинного коду
+  const handleApplyCode = () => {
+    if (viewMode === 'code') {
+      wrapSelectionInTextarea('`', '`', 'код');
+      return;
+    }
+
+    if (!visualEditorRef.current) return;
+    restoreSelection();
+
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !visualEditorRef.current.contains(sel.anchorNode)) return;
+
+    // Перевіряємо, чи курсор вже у <code>
+    let codeEl: HTMLElement | null = null;
+    let node: Node | null = sel.anchorNode;
+    while (node && node !== visualEditorRef.current) {
+      if (node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).tagName.toLowerCase() === 'code') {
+        codeEl = node as HTMLElement;
+        break;
+      }
+      node = node.parentNode;
+    }
+
+    if (codeEl && codeEl.parentNode) {
+      while (codeEl.firstChild) {
+        codeEl.parentNode.insertBefore(codeEl.firstChild, codeEl);
+      }
+      codeEl.remove();
+      pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
+      return;
+    }
+
+    const range = sel.getRangeAt(0);
+    const code = document.createElement('code');
+    code.style.background = '#f4f4f5';
+    code.style.padding = '2px 5px';
+    code.style.borderRadius = '4px';
+    code.style.fontFamily = 'monospace';
+    code.style.fontSize = '0.9em';
+
+    if (!range.collapsed) {
+      code.appendChild(range.extractContents());
+    } else {
+      code.textContent = 'код';
+    }
+    range.insertNode(code);
+
+    const newRange = document.createRange();
+    newRange.setStartAfter(code);
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+    savedRangeRef.current = newRange.cloneRange();
+
+    pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
+  };
+
+  // 17. Застосування / Скасування Telegram спойлера
   const handleApplySpoiler = () => {
-    saveSelection();
-    const sel = window.getSelection();
-    if (!sel || sel.rangeCount === 0) return;
+    if (viewMode === 'code') {
+      wrapSelectionInTextarea('||', '||', 'прихований текст');
+      return;
+    }
 
-    // Перевіряємо, чи курсор або виділений текст вже всередині існуючого спойлера
+    if (!visualEditorRef.current) return;
+    restoreSelection();
+
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !visualEditorRef.current.contains(sel.anchorNode)) return;
+
     let node: Node | null = sel.anchorNode;
     let spoilerEl: HTMLElement | null = null;
     while (node && node !== visualEditorRef.current) {
@@ -358,30 +660,40 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
       node = node.parentNode;
     }
 
-    // Якщо всередині спойлера — ВІДМІНЯЄМО СПОЙЛЕР (розгортаємо текст назад у звичайний)
-    if (spoilerEl) {
-      const parent = spoilerEl.parentNode;
-      if (parent) {
-        while (spoilerEl.firstChild) {
-          parent.insertBefore(spoilerEl.firstChild, spoilerEl);
-        }
-        spoilerEl.remove();
-        if (visualEditorRef.current) {
-          pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
-        }
+    if (spoilerEl && spoilerEl.parentNode) {
+      while (spoilerEl.firstChild) {
+        spoilerEl.parentNode.insertBefore(spoilerEl.firstChild, spoilerEl);
       }
+      spoilerEl.remove();
+      pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
       return;
     }
 
-    // Якщо ні — застосовуємо спойлер без рамок та сірих блоків
-    const selectedText = sel.toString();
-    insertVisualHtml(
-      `<span class="tg-spoiler" data-spoiler="true">${selectedText || 'прихований текст'}</span>&nbsp;`
-    );
+    const range = sel.getRangeAt(0);
+    const spoiler = document.createElement('span');
+    spoiler.className = 'tg-spoiler';
+    spoiler.setAttribute('data-spoiler', 'true');
+
+    if (!range.collapsed) {
+      spoiler.appendChild(range.extractContents());
+    } else {
+      spoiler.textContent = 'прихований текст';
+    }
+    range.insertNode(spoiler);
+
+    const newRange = document.createRange();
+    newRange.setStartAfter(spoiler);
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+    savedRangeRef.current = newRange.cloneRange();
+
+    pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
   };
 
-  // 15. Застосування Callout блоку (Кольорова цитата / довідка)
+  // 18. Застосування Callout блоку (Цитати / довідки)
   const handleApplyCallout = (variant: 'info' | 'warning' | 'success' | 'danger' | 'dark' | 'quote') => {
+    setActiveDropdown(null);
     const configs: Record<
       typeof variant,
       { bg: string; border: string; color: string; title: string }
@@ -397,27 +709,52 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
     const cfg = configs[variant];
     const textCol = variant === 'dark' ? '#fafafa' : '#1f2937';
 
+    if (viewMode === 'code') {
+      wrapSelectionInTextarea(
+        `\n\n[callout:${variant} title="${cfg.title}"]\n`,
+        `\n[/callout]\n\n`,
+        'Введіть текст повідомлення тут...'
+      );
+      return;
+    }
+
+    if (!visualEditorRef.current) return;
+    restoreSelection();
+
+    const sel = window.getSelection();
+    let selectedText =
+      (sel && sel.toString()) || (savedRangeRef.current && savedRangeRef.current.toString()) || 'Введіть текст повідомлення тут...';
+
     const snippet = `
       <div class="callout-box callout-${variant}" data-variant="${variant}" style="margin: 20px 0; padding: 16px; border-radius: 8px; border-left: 4px solid ${cfg.border}; background: ${cfg.bg};">
         <div class="callout-title" style="font-weight: 600; font-size: 13px; text-transform: uppercase; margin-bottom: 6px; color: ${cfg.color}; letter-spacing: 0.05em;">
           ${cfg.title}
         </div>
         <div class="callout-body" style="color: ${textCol}; line-height: 1.6;">
-          Введіть текст повідомлення тут...
+          ${selectedText}
         </div>
       </div>
-      <p><br/></p>
     `;
 
-    insertVisualHtml(snippet);
-    setActiveDropdown(null);
+    insertBlockElement(snippet);
   };
 
-  // 16. Відкриття вікна посилання (створення нового або редагування наявного)
+  // 18. Відкриття вікна посилання
   const handleOpenLinkModal = (existingLinkEl?: HTMLAnchorElement | null) => {
     saveSelection();
-    const sel = window.getSelection();
+    setActiveDropdown(null);
 
+    if (viewMode === 'code' && textareaRef.current) {
+      const ta = textareaRef.current;
+      const selected = ta.value.slice(ta.selectionStart, ta.selectionEnd);
+      setIsEditingExistingLink(false);
+      setLinkText(selected);
+      setLinkUrl('');
+      setShowLinkModal(true);
+      return;
+    }
+
+    const sel = window.getSelection();
     let targetLink: HTMLAnchorElement | null = existingLinkEl || null;
 
     if (!targetLink && sel && sel.anchorNode) {
@@ -439,15 +776,14 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
       setLinkUrl(targetLink.getAttribute('href') || '');
     } else {
       setIsEditingExistingLink(false);
-      setLinkText(sel ? sel.toString() : '');
+      setLinkText((sel && sel.toString()) || (savedRangeRef.current && savedRangeRef.current.toString()) || '');
       setLinkUrl('');
     }
 
     setShowLinkModal(true);
-    setActiveDropdown(null);
   };
 
-  // Збереження посилання (нового або відредагованого)
+  // Збереження посилання
   const handleApplyLink = () => {
     if (!linkUrl.trim()) return;
     let cleanUrl = linkUrl.trim();
@@ -462,24 +798,47 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
     }
     const title = linkText.trim() || cleanUrl;
 
+    if (viewMode === 'code') {
+      wrapSelectionInTextarea(`[${title}](${cleanUrl})`, '', '');
+      setShowLinkModal(false);
+      return;
+    }
+
     if (activeLinkElRef.current) {
-      // Оновлюємо існуюче посилання
       activeLinkElRef.current.setAttribute('href', cleanUrl);
       activeLinkElRef.current.textContent = title;
       if (visualEditorRef.current) {
         pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
       }
     } else {
-      // Вставляємо нове посилання
-      insertVisualHtml(
-        `<a href="${cleanUrl}" target="_blank" rel="noopener noreferrer">${title}</a>&nbsp;`
-      );
+      if (!visualEditorRef.current) return;
+      restoreSelection();
+      const sel = window.getSelection();
+      const a = document.createElement('a');
+      a.href = cleanUrl;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      a.textContent = title;
+      if (sel && sel.rangeCount > 0 && visualEditorRef.current.contains(sel.anchorNode)) {
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(a);
+        const newRange = document.createRange();
+        newRange.setStartAfter(a);
+        newRange.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+        savedRangeRef.current = newRange.cloneRange();
+      } else {
+        visualEditorRef.current.appendChild(a);
+      }
+      pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
     }
     setShowLinkModal(false);
     activeLinkElRef.current = null;
   };
 
-  // Видалення посилання (розлінкування у звичайний текст)
+  // Видалення посилання
   const handleRemoveLink = () => {
     if (activeLinkElRef.current) {
       const parent = activeLinkElRef.current.parentNode;
@@ -495,8 +854,36 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
     activeLinkElRef.current = null;
   };
 
-  // 17. Вставка таблиці
+  // 19. Вставка таблиці (виправлено динамічне додавання колонок)
+  const handleColsChange = (num: number) => {
+    setTableCols(num);
+    setTableHeaders((prev) => {
+      const next = [...prev];
+      if (num > next.length) {
+        for (let i = next.length + 1; i <= num; i++) {
+          next.push(`Колонка ${i}`);
+        }
+      } else {
+        return next.slice(0, num);
+      }
+      return next;
+    });
+  };
+
   const handleInsertTable = () => {
+    if (viewMode === 'code') {
+      const headLine = `| ${tableHeaders.join(' | ')} |`;
+      const sepLine = `| ${tableHeaders.map(() => '---').join(' | ')} |`;
+      let rowsLines = '';
+      for (let r = 1; r <= tableRows; r++) {
+        const rowData = tableHeaders.map((_, c) => `Дані ${r}.${c + 1}`);
+        rowsLines += `| ${rowData.join(' | ')} |\n`;
+      }
+      wrapSelectionInTextarea(`\n\n${headLine}\n${sepLine}\n${rowsLines}\n\n`, '', '');
+      setShowTableModal(false);
+      return;
+    }
+
     const thead = `<thead><tr style="background: #f4f4f5;">${tableHeaders
       .map(
         (h) =>
@@ -523,14 +910,13 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
           <tbody>${tbodyRows}</tbody>
         </table>
       </div>
-      <p><br/></p>
     `;
 
-    insertVisualHtml(tableHtml);
+    insertBlockElement(tableHtml);
     setShowTableModal(false);
   };
 
-  // 18. Вставка фото (з файлу або URL)
+  // 20. Завантаження та вставка фотографій
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -601,6 +987,16 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
   const handleApplyImage = () => {
     if (!imageUrl.trim()) return;
     const caption = imageCaption.trim();
+
+    if (viewMode === 'code') {
+      wrapSelectionInTextarea(`\n\n![${caption}](${imageUrl.trim()})\n\n`, '', '');
+      setShowImageModal(false);
+      setImageUrl('');
+      setImageCaption('');
+      setUploadError(null);
+      return;
+    }
+
     const captionHtml = caption
       ? `<figcaption style="text-align: center; font-size: 13px; color: #6b7280; font-style: italic; margin-top: 8px;">${caption}</figcaption>`
       : '';
@@ -609,16 +1005,15 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
         <img src="${imageUrl.trim()}" alt="${caption}" style="max-width: 100%; max-height: 620px; border-radius: 8px; margin: 0 auto; display: block;" />
         ${captionHtml}
       </figure>
-      <p><br/></p>
     `;
-    insertVisualHtml(imgHtml);
+    insertBlockElement(imgHtml);
     setShowImageModal(false);
     setImageUrl('');
     setImageCaption('');
     setUploadError(null);
   };
 
-  // 19. Вставка YouTube
+  // 21. Вставка YouTube відео
   const handleApplyVideo = () => {
     if (!videoUrl.trim()) return;
     const regExp =
@@ -627,31 +1022,34 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
     const vid = match ? match[1] : '';
 
     if (vid) {
-      const vidHtml = `
-        <div class="article-video-wrapper" style="margin: 28px 0; aspect-ratio: 16/9; background: #000; border-radius: 8px; overflow: hidden;">
-          <iframe src="https://www.youtube.com/embed/${vid}" style="width: 100%; height: 100%; border: 0;" allowfullscreen></iframe>
-        </div>
-        <p><br/></p>
-      `;
-      insertVisualHtml(vidHtml);
+      if (viewMode === 'code') {
+        wrapSelectionInTextarea(`\n\n[video: https://www.youtube.com/watch?v=${vid}]\n\n`, '', '');
+      } else {
+        const vidHtml = `
+          <div class="article-video-wrapper" style="margin: 28px 0; aspect-ratio: 16/9; background: #000; border-radius: 8px; overflow: hidden;">
+            <iframe src="https://www.youtube.com/embed/${vid}" style="width: 100%; height: 100%; border: 0;" allowfullscreen></iframe>
+          </div>
+        `;
+        insertBlockElement(vidHtml);
+      }
     }
     setShowVideoModal(false);
     setVideoUrl('');
   };
 
-  // Кількість слів
+  // Статистика тексту
   const wordsCount = value.trim() ? value.replace(/<[^>]*>/g, ' ').trim().split(/\s+/).filter(Boolean).length : 0;
   const charsCount = value.replace(/<[^>]*>/g, '').length;
   const readTimeMinutes = Math.max(1, Math.ceil(wordsCount / 180));
 
-  // Оновлення коду в textarea (якщо в режимі Code)
+  // Оновлення коду в textarea
   const handleCodeChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     pushToHistoryAndEmit(val);
   };
 
-  // Гарячі клавіші на візуальному контейнері
-  const handleVisualKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+  // Гарячі клавіші на візуальному контейнері та коді
+  const handleKeyDown = (e: React.KeyboardEvent) => {
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey) {
       if (e.key === 'z' || e.key === 'Z' || e.key === 'я' || e.key === 'Я') {
         e.preventDefault();
@@ -711,10 +1109,13 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
       {/* ПАНЕЛЬ ІНСТРУМЕНТІВ (TOOLBAR) */}
       <div className="bg-neutral-50/95 border-b border-neutral-200 p-2 sm:p-2.5 flex flex-wrap items-center justify-between gap-1.5 select-none text-neutral-700 sticky top-0 z-20">
         <div className="flex flex-wrap items-center gap-1">
-          {/* UNDO / REDO (ПОВЕРНЕННЯ / ПОВТОРЕННЯ ДІЙ) */}
+          {/* UNDO / REDO */}
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => {
+              saveSelection();
+              e.preventDefault();
+            }}
             onClick={handleUndo}
             disabled={historyIndex <= 0}
             className="p-1.5 text-neutral-700 hover:text-black hover:bg-neutral-200/70 rounded transition-colors disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
@@ -725,7 +1126,10 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
 
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => {
+              saveSelection();
+              e.preventDefault();
+            }}
             onClick={handleRedo}
             disabled={historyIndex >= history.length - 1}
             className="p-1.5 text-neutral-700 hover:text-black hover:bg-neutral-200/70 rounded transition-colors disabled:opacity-30 disabled:pointer-events-none cursor-pointer"
@@ -740,7 +1144,10 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
           <div className="relative editor-dropdown-container">
             <button
               type="button"
-              onMouseDown={(e) => e.preventDefault()}
+              onMouseDown={(e) => {
+                saveSelection();
+                e.preventDefault();
+              }}
               onClick={() => {
                 saveSelection();
                 setActiveDropdown(activeDropdown === 'heading' ? null : 'heading');
@@ -799,7 +1206,10 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
           {/* 2. БАЗОВЕ ФОРМАТУВАННЯ (B, I, U, S, Code, Spoiler) */}
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => {
+              saveSelection();
+              e.preventDefault();
+            }}
             onClick={() => executeCommand('bold')}
             className="p-1.5 text-neutral-700 hover:text-black hover:bg-neutral-200/70 rounded transition-colors cursor-pointer"
             title="Жирний (Ctrl+B)"
@@ -809,7 +1219,10 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
 
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => {
+              saveSelection();
+              e.preventDefault();
+            }}
             onClick={() => executeCommand('italic')}
             className="p-1.5 text-neutral-700 hover:text-black hover:bg-neutral-200/70 rounded transition-colors cursor-pointer"
             title="Курсив (Ctrl+I)"
@@ -819,7 +1232,10 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
 
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => {
+              saveSelection();
+              e.preventDefault();
+            }}
             onClick={() => executeCommand('underline')}
             className="p-1.5 text-neutral-700 hover:text-black hover:bg-neutral-200/70 rounded transition-colors cursor-pointer"
             title="Підкреслений (Ctrl+U)"
@@ -829,7 +1245,10 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
 
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => {
+              saveSelection();
+              e.preventDefault();
+            }}
             onClick={() => executeCommand('strikeThrough')}
             className="p-1.5 text-neutral-700 hover:text-black hover:bg-neutral-200/70 rounded transition-colors cursor-pointer"
             title="Закреслений"
@@ -839,14 +1258,11 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
 
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => {
-              const sel = window.getSelection();
-              const text = sel ? sel.toString() : '';
-              insertVisualHtml(
-                `<code style="background: #f4f4f5; padding: 2px 5px; border-radius: 4px; font-family: monospace; font-size: 0.9em;">${text || 'код'}</code>&nbsp;`
-              );
+            onMouseDown={(e) => {
+              saveSelection();
+              e.preventDefault();
             }}
+            onClick={handleApplyCode}
             className="p-1.5 text-neutral-700 hover:text-black hover:bg-neutral-200/70 rounded transition-colors cursor-pointer"
             title="Код / Моноширинний"
           >
@@ -856,7 +1272,10 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
           {/* TELEGRAM SPOILER (ПРИХОВАНИЙ ТЕКСТ) */}
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => {
+              saveSelection();
+              e.preventDefault();
+            }}
             onClick={handleApplySpoiler}
             className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-neutral-800 bg-neutral-200/70 hover:bg-neutral-300 rounded transition-colors cursor-pointer"
             title="Прихований текст / Спойлер (як у Telegram)"
@@ -871,7 +1290,10 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
           <div className="relative editor-dropdown-container">
             <button
               type="button"
-              onMouseDown={(e) => e.preventDefault()}
+              onMouseDown={(e) => {
+                saveSelection();
+                e.preventDefault();
+              }}
               onClick={() => {
                 saveSelection();
                 setActiveDropdown(activeDropdown === 'highlight' ? null : 'highlight');
@@ -884,7 +1306,7 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
             </button>
 
             {activeDropdown === 'highlight' && (
-              <div className="absolute top-full left-0 mt-1 z-30 w-44 bg-white border border-neutral-200 rounded-md shadow-lg p-2 animate-fade-in space-y-1">
+              <div className="absolute top-full left-0 mt-1 z-30 w-48 bg-white border border-neutral-200 rounded-md shadow-lg p-2 animate-fade-in space-y-1">
                 <div className="text-[10px] uppercase font-bold text-neutral-400 px-1 mb-1">
                   Колір маркера
                 </div>
@@ -907,6 +1329,15 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
                     <span>{color.label}</span>
                   </button>
                 ))}
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleApplyHighlight(null)}
+                  className="w-full flex items-center gap-2 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100 rounded cursor-pointer text-left border-t border-neutral-100 mt-1 pt-1.5"
+                >
+                  <X className="w-3.5 h-3.5 text-neutral-400" />
+                  <span>Зняти маркер</span>
+                </button>
               </div>
             )}
           </div>
@@ -915,7 +1346,10 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
           <div className="relative editor-dropdown-container">
             <button
               type="button"
-              onMouseDown={(e) => e.preventDefault()}
+              onMouseDown={(e) => {
+                saveSelection();
+                e.preventDefault();
+              }}
               onClick={() => {
                 saveSelection();
                 setActiveDropdown(activeDropdown === 'color' ? null : 'color');
@@ -928,7 +1362,7 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
             </button>
 
             {activeDropdown === 'color' && (
-              <div className="absolute top-full left-0 mt-1 z-30 w-44 bg-white border border-neutral-200 rounded-md shadow-lg p-2 animate-fade-in space-y-1">
+              <div className="absolute top-full left-0 mt-1 z-30 w-48 bg-white border border-neutral-200 rounded-md shadow-lg p-2 animate-fade-in space-y-1">
                 <div className="text-[10px] uppercase font-bold text-neutral-400 px-1 mb-1">
                   Колір тексту
                 </div>
@@ -954,6 +1388,15 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
                     </span>
                   </button>
                 ))}
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleApplyColor(null)}
+                  className="w-full flex items-center gap-2 px-2 py-1 text-xs text-neutral-600 hover:bg-neutral-100 rounded cursor-pointer text-left border-t border-neutral-100 mt-1 pt-1.5"
+                >
+                  <span className="w-3.5 h-3.5 rounded-full bg-neutral-900 border border-neutral-300" />
+                  <span>Чорний за замовчуванням</span>
+                </button>
               </div>
             )}
           </div>
@@ -962,7 +1405,10 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
           <div className="relative editor-dropdown-container">
             <button
               type="button"
-              onMouseDown={(e) => e.preventDefault()}
+              onMouseDown={(e) => {
+                saveSelection();
+                e.preventDefault();
+              }}
               onClick={() => {
                 saveSelection();
                 setActiveDropdown(activeDropdown === 'font' ? null : 'font');
@@ -975,11 +1421,11 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
             </button>
 
             {activeDropdown === 'font' && (
-              <div className="absolute top-full left-0 mt-1 z-30 w-48 bg-white border border-neutral-200 rounded-md shadow-lg p-1.5 animate-fade-in space-y-1">
+              <div className="absolute top-full left-0 mt-1 z-30 w-52 bg-white border border-neutral-200 rounded-md shadow-lg p-1.5 animate-fade-in space-y-1">
                 <button
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => handleApplyFont('Georgia, serif')}
+                  onClick={() => handleApplyFont('Georgia, serif', 'serif')}
                   className="w-full px-2.5 py-1.5 text-left text-sm font-serif hover:bg-neutral-100 rounded cursor-pointer"
                 >
                   Класичний Serif (із зарубками)
@@ -987,7 +1433,7 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
                 <button
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => handleApplyFont('-apple-system, BlinkMacSystemFont, sans-serif')}
+                  onClick={() => handleApplyFont('-apple-system, BlinkMacSystemFont, sans-serif', 'sans')}
                   className="w-full px-2.5 py-1.5 text-left text-sm font-sans hover:bg-neutral-100 rounded cursor-pointer"
                 >
                   Сучасний Sans (гротеск)
@@ -995,10 +1441,18 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
                 <button
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => handleApplyFont('monospace')}
+                  onClick={() => handleApplyFont('monospace', 'mono')}
                   className="w-full px-2.5 py-1.5 text-left text-xs font-mono hover:bg-neutral-100 rounded cursor-pointer"
                 >
                   Друкарська машинка (Mono)
+                </button>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleApplyFont(null, 'default')}
+                  className="w-full px-2.5 py-1.5 text-left text-xs text-neutral-600 hover:bg-neutral-100 rounded cursor-pointer border-t border-neutral-100 mt-1"
+                >
+                  Стандартний шрифт сайту
                 </button>
               </div>
             )}
@@ -1009,7 +1463,10 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
           {/* 6. СПИСКИ */}
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => {
+              saveSelection();
+              e.preventDefault();
+            }}
             onClick={() => executeCommand('insertUnorderedList')}
             className="p-1.5 text-neutral-700 hover:text-black hover:bg-neutral-200/70 rounded transition-colors cursor-pointer"
             title="Маркований список"
@@ -1019,7 +1476,10 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
 
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => {
+              saveSelection();
+              e.preventDefault();
+            }}
             onClick={() => executeCommand('insertOrderedList')}
             className="p-1.5 text-neutral-700 hover:text-black hover:bg-neutral-200/70 rounded transition-colors cursor-pointer"
             title="Нумерований список"
@@ -1033,7 +1493,10 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
           <div className="relative editor-dropdown-container">
             <button
               type="button"
-              onMouseDown={(e) => e.preventDefault()}
+              onMouseDown={(e) => {
+                saveSelection();
+                e.preventDefault();
+              }}
               onClick={() => {
                 saveSelection();
                 setActiveDropdown(activeDropdown === 'callout' ? null : 'callout');
@@ -1052,10 +1515,14 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => {
-                    insertVisualHtml(
-                      `<blockquote style="border-left: 3px solid #000; padding-left: 16px; margin: 20px 0; font-style: italic; color: #1f2937;">Текст редакційної цитати...</blockquote><p><br/></p>`
-                    );
                     setActiveDropdown(null);
+                    if (viewMode === 'code') {
+                      wrapSelectionInTextarea('\n\n> ', '\n\n', 'Текст редакційної цитати...');
+                      return;
+                    }
+                    insertBlockElement(
+                      `<blockquote style="border-left: 3px solid #000; padding-left: 16px; margin: 20px 0; font-style: italic; color: #1f2937;">Текст редакційної цитати...</blockquote>`
+                    );
                   }}
                   className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs hover:bg-neutral-100 rounded text-left cursor-pointer"
                 >
@@ -1116,7 +1583,10 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
           {/* 8. ВСТАВКА МЕДІА, ТАБЛИЦЬ, ПОСИЛАНЬ */}
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => {
+              saveSelection();
+              e.preventDefault();
+            }}
             onClick={() => handleOpenLinkModal()}
             className="p-1.5 text-neutral-700 hover:text-black hover:bg-neutral-200/70 rounded transition-colors cursor-pointer"
             title="Зробити посиланням (Ctrl+K)"
@@ -1126,7 +1596,10 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
 
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => {
+              saveSelection();
+              e.preventDefault();
+            }}
             onClick={() => {
               saveSelection();
               setShowTableModal(true);
@@ -1139,7 +1612,10 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
 
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => {
+              saveSelection();
+              e.preventDefault();
+            }}
             onClick={() => {
               saveSelection();
               setShowImageModal(true);
@@ -1152,7 +1628,10 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
 
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => {
+              saveSelection();
+              e.preventDefault();
+            }}
             onClick={() => {
               saveSelection();
               setShowVideoModal(true);
@@ -1165,9 +1644,18 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
 
           <button
             type="button"
-            onMouseDown={(e) => e.preventDefault()}
+            onMouseDown={(e) => {
+              saveSelection();
+              e.preventDefault();
+            }}
             onClick={() => {
-              insertVisualHtml('<hr class="article-divider" style="border: 0; border-top: 1px solid #e5e7eb; margin: 32px 0;" /><p><br/></p>');
+              if (viewMode === 'code') {
+                wrapSelectionInTextarea('\n\n---\n\n', '', '');
+                return;
+              }
+              insertBlockElement(
+                '<hr class="article-divider" style="border: 0; border-top: 1px solid #e5e7eb; margin: 32px 0;" />'
+              );
             }}
             className="p-1.5 text-neutral-700 hover:text-black hover:bg-neutral-200/70 rounded transition-colors cursor-pointer"
             title="Розділювач статті"
@@ -1230,6 +1718,7 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
             ref={visualEditorRef}
             contentEditable
             suppressContentEditableWarning
+            data-placeholder={placeholder}
             onInput={(e) => {
               const html = e.currentTarget.innerHTML;
               pushToHistoryAndEmit(html);
@@ -1244,7 +1733,7 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
                 handleOpenLinkModal(linkEl as HTMLAnchorElement);
               }
             }}
-            onKeyDown={handleVisualKeyDown}
+            onKeyDown={handleKeyDown}
             onKeyUp={saveSelection}
             onMouseUp={saveSelection}
             style={{ minHeight }}
@@ -1259,6 +1748,7 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
               ref={visualEditorRef}
               contentEditable
               suppressContentEditableWarning
+              data-placeholder={placeholder}
               onInput={(e) => {
                 const html = e.currentTarget.innerHTML;
                 pushToHistoryAndEmit(html);
@@ -1273,7 +1763,7 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
                   handleOpenLinkModal(linkEl as HTMLAnchorElement);
                 }
               }}
-              onKeyDown={handleVisualKeyDown}
+              onKeyDown={handleKeyDown}
               onKeyUp={saveSelection}
               onMouseUp={saveSelection}
               style={{ minHeight }}
@@ -1291,8 +1781,10 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
         {/* 3. РЕЖИМ КОДУ / MARKDOWN */}
         {viewMode === 'code' && (
           <textarea
+            ref={textareaRef}
             value={value}
             onChange={handleCodeChange}
+            onKeyDown={handleKeyDown}
             placeholder={placeholder}
             style={{ minHeight }}
             className="w-full p-5 text-sm sm:text-base leading-relaxed font-mono text-neutral-800 focus:outline-none resize-y border-0 bg-neutral-50/30"
@@ -1444,7 +1936,7 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
           document.body
         )}
 
-      {/* 2. ТАБЛИЦЯ */}
+      {/* 2. ТАБЛИЦЯ (з виправленим оновленням колонок) */}
       {showTableModal &&
         createPortal(
           <div
@@ -1477,12 +1969,12 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
                     </label>
                     <select
                       value={tableCols}
-                      onChange={(e) => setTableCols(Number(e.target.value))}
+                      onChange={(e) => handleColsChange(Number(e.target.value))}
                       className="w-full text-sm border border-neutral-300 rounded px-3 py-2 focus:border-black focus:outline-none"
                     >
                       {[2, 3, 4, 5, 6].map((num) => (
                         <option key={num} value={num}>
-                          {num} колонки
+                          {num} {num < 5 ? 'колонки' : 'колонок'}
                         </option>
                       ))}
                     </select>

@@ -408,20 +408,30 @@ export default function App() {
     return 'ua';
   });
 
+  // Темна тема є основною за замовчуванням (HEX #111 для header/footer, #222 для body, #cbcbcb для тексту).
+  // Якщо користувач змінює тему, браузер локально запам'ятовує вибір у localStorage.
   const [siteTheme, setSiteTheme] = useState<SiteTheme>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem(THEME_STORAGE_KEY);
-      if (saved === 'dark' || saved === 'light') return saved;
-      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        return 'dark';
+      try {
+        const saved = localStorage.getItem(THEME_STORAGE_KEY);
+        if (saved === 'light' || saved === 'dark') return saved;
+      } catch (e) {
+        console.error(e);
       }
     }
-    return 'light';
+    return 'dark';
   });
 
   useEffect(() => {
     if (typeof document !== 'undefined') {
-      if (siteTheme === 'dark') {
+      const isAdminRoute = currentRoute === 'admin' || currentRoute === 'login';
+      if (isAdminRoute) {
+        // В адмін-панелі та на сторінці входу має бути виключно світла тема
+        document.documentElement.classList.remove('dark');
+        document.documentElement.setAttribute('data-theme', 'light');
+        document.body.style.backgroundColor = '#ffffff';
+        document.body.style.color = '#000000';
+      } else if (siteTheme === 'dark') {
         document.documentElement.classList.add('dark');
         document.documentElement.setAttribute('data-theme', 'dark');
         document.body.style.backgroundColor = '#222222';
@@ -438,7 +448,7 @@ export default function App() {
         console.error(e);
       }
     }
-  }, [siteTheme]);
+  }, [siteTheme, currentRoute]);
 
   const toggleTheme = () => {
     setSiteTheme((prev) => (prev === 'light' ? 'dark' : 'light'));

@@ -80,7 +80,7 @@ export const renderInlineFormatting = (text: string): React.ReactNode => {
   // 10. Code: `code`
 
   const regex =
-    /(\|\|[\s\S]*?\|\||\[hl:([a-z0-9#-]+)\][\s\S]*?\[\/hl\]|==[\s\S]*?==|\[color:([#a-zA-Z0-9]+)\][\s\S]*?\[\/color\]|\[font:(serif|sans|mono)\][\s\S]*?\[\/font\]|(?<!!)\[(.*?)\]\((https?:\/\/[^\s)]+|\/[^\s)]+|mailto:[^\s)]+|tel:[^\s)]+)\)|\*\*([^*]+)\*\*|<b>(.*?)<\/b>|(?<!\*)\*([^*]+)\*(?!\*)|<i>(.*?)<\/i>|~~([^~]+)~~|<s>(.*?)<\/s>|<u>(.*?)<\/u>|\[u\](.*?)\[\/u\]|`([^`]+)`)/g;
+    /(<a\s+[^>]*href=["'][^"']*["'][^>]*>[\s\S]*?<\/a>|\|\|[\s\S]*?\|\||\[hl:([a-z0-9#-]+)\][\s\S]*?\[\/hl\]|==[\s\S]*?==|\[color:([#a-zA-Z0-9]+)\][\s\S]*?\[\/color\]|\[font:(serif|sans|mono)\][\s\S]*?\[\/font\]|(?<!!)\[(.*?)\]\((https?:\/\/[^\s)]+|\/[^\s)]+|mailto:[^\s)]+|tel:[^\s)]+)\)|\*\*([^*]+)\*\*|<b>(.*?)<\/b>|(?<!\*)\*([^*]+)\*(?!\*)|<i>(.*?)<\/i>|~~([^~]+)~~|<s>(.*?)<\/s>|<u>(.*?)<\/u>|\[u\](.*?)\[\/u\]|`([^`]+)`)/g;
 
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
@@ -96,8 +96,30 @@ export const renderInlineFormatting = (text: string): React.ReactNode => {
 
     const key = `inline_${matchIndex}_${fullMatch.slice(0, 10)}`;
 
+    // 0. HTML Link: <a href="...">...</a>
+    if (fullMatch.startsWith('<a') && fullMatch.endsWith('</a>')) {
+      const urlMatch = fullMatch.match(/href=["']([^"']*)["']/i);
+      const innerMatch = fullMatch.match(/>([\s\S]*?)<\/a>/i);
+      if (urlMatch) {
+        const url = urlMatch[1];
+        const innerText = innerMatch ? innerMatch[1] : url;
+        const isExternal = url.startsWith('http://') || url.startsWith('https://');
+        parts.push(
+          <a
+            key={key}
+            href={url}
+            target={isExternal ? '_blank' : undefined}
+            rel={isExternal ? 'noopener noreferrer' : undefined}
+            className="inline-flex items-baseline gap-1 font-medium underline underline-offset-3 decoration-1 transition-colors cursor-pointer text-[#0089ff] dark:text-[#58b9ff]"
+          >
+            <span>{renderInlineFormatting(innerText)}</span>
+            {isExternal && <ExternalLink className="w-3 h-3 self-center opacity-70 inline" />}
+          </a>
+        );
+      }
+    }
     // 1. Telegram Spoiler: ||text||
-    if (fullMatch.startsWith('||') && fullMatch.endsWith('||')) {
+    else if (fullMatch.startsWith('||') && fullMatch.endsWith('||')) {
       const inner = fullMatch.slice(2, -2);
       parts.push(<TelegramSpoiler key={key} text={inner} />);
     }
@@ -564,7 +586,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content }) => 
   if (!content) return null;
 
   // Якщо контент містить HTML-розмітку від візуального редактора
-  const isHtml = /<(p|h[1-6]|table|blockquote|ul|ol|figure|div|mark)[^>]*>/i.test(content);
+  const isHtml = /<(p|h[1-6]|table|blockquote|ul|ol|figure|div|mark|a)[^>]*>/i.test(content);
 
   if (isHtml) {
     const processedHtml = markdownToHtml(content);

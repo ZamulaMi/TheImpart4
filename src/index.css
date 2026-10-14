@@ -138,6 +138,22 @@ html.dark body {
   text-decoration-color: #0089ff !important;
 }
 
+/* У темній темі сайту колір посилань у статтях робимо світлішим для високої читабельності на фоні #222 */
+html.dark .article-rendered-html a,
+html.dark .article-content a,
+html.dark .prose a,
+html.dark .article-link {
+  color: #58b9ff !important;
+  text-decoration-color: rgba(88, 185, 255, 0.5) !important;
+}
+html.dark .article-rendered-html a:hover,
+html.dark .article-content a:hover,
+html.dark .prose a:hover,
+html.dark .article-link:hover {
+  color: #9cd5ff !important;
+  text-decoration-color: #58b9ff !important;
+}
+
 /* Іконки соцмереж у футері: виключення (сірий у спокої, чорний при наведенні) */
 .footer-social-link,
 .footer-social-link:visited {

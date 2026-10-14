@@ -246,7 +246,7 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
     if (sel && sel.rangeCount > 0 && visualEditorRef.current) {
       const range = sel.getRangeAt(0);
       const common = range.commonAncestorContainer;
-      if (visualEditorRef.current.contains(common)) {
+      if (visualEditorRef.current === common || visualEditorRef.current.contains(common)) {
         savedRangeRef.current = range.cloneRange();
       }
     }
@@ -254,11 +254,14 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
 
   const restoreSelection = () => {
     if (!savedRangeRef.current || !visualEditorRef.current) return;
-    const sel = window.getSelection();
-    if (sel) {
-      sel.removeAllRanges();
-      sel.addRange(savedRangeRef.current);
-    }
+    try {
+      visualEditorRef.current.focus();
+      const sel = window.getSelection();
+      if (sel) {
+        sel.removeAllRanges();
+        sel.addRange(savedRangeRef.current);
+      }
+    } catch {}
   };
 
   // 9. Допоміжна функція для обгортання тексту в режимі Коду (Textarea)
@@ -768,6 +771,17 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
       }
     }
 
+    if (!targetLink && savedRangeRef.current && visualEditorRef.current) {
+      let node: Node | null = savedRangeRef.current.commonAncestorContainer;
+      while (node && node !== visualEditorRef.current) {
+        if (node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).tagName.toLowerCase() === 'a') {
+          targetLink = node as HTMLAnchorElement;
+          break;
+        }
+        node = node.parentNode;
+      }
+    }
+
     activeLinkElRef.current = targetLink;
 
     if (targetLink) {
@@ -776,7 +790,11 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
       setLinkUrl(targetLink.getAttribute('href') || '');
     } else {
       setIsEditingExistingLink(false);
-      setLinkText((sel && sel.toString()) || (savedRangeRef.current && savedRangeRef.current.toString()) || '');
+      const textFromSel =
+        (savedRangeRef.current && savedRangeRef.current.toString()) ||
+        (sel && sel.toString()) ||
+        '';
+      setLinkText(textFromSel);
       setLinkUrl('');
     }
 
@@ -798,56 +816,130 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
     }
     const title = linkText.trim() || cleanUrl;
 
-    if (viewMode === 'code') {
-      wrapSelectionInTextarea(`[${title}](${cleanUrl})`, '', '');
+    if (viewMode === 'code' && textareaRef.current) {
+      const ta = textareaRef.current;
+      const start = ta.selectionStart;
+      const end = ta.selectionEnd;
+      const text = ta.value;
+      const mdLink = `[${title}](${cleanUrl})`;
+      const newVal = text.slice(0, start) + mdLink + text.slice(end);
+      pushToHistoryAndEmit(newVal);
       setShowLinkModal(false);
+      setTimeout(() => {
+        ta.focus();
+        ta.setSelectionRange(start + mdLink.length, start + mdLink.length);
+      }, 0);
       return;
     }
 
-    if (activeLinkElRef.current) {
+    if (activeLinkElRef.current && visualEditorRef.current?.contains(activeLinkElRef.current)) {
       activeLinkElRef.current.setAttribute('href', cleanUrl);
       activeLinkElRef.current.textContent = title;
+      activeLinkElRef.current.target = '_blank';
+      activeLinkElRef.current.rel = 'noopener noreferrer';
+      activeLinkElRef.current.style.color = '#0089ff';
+      activeLinkElRef.current.style.textDecoration = 'underline';
+      activeLinkElRef.current.style.textUnderlineOffset = '3px';
       if (visualEditorRef.current) {
         pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
       }
-    } else {
-      if (!visualEditorRef.current) return;
-      restoreSelection();
+      setShowLinkModal(false);
+      activeLinkElRef.current = null;
+      return;
+    }
+
+    if (!visualEditorRef.current) return;
+
+    // Створюємо елемент посилання
+    const a = document.createElement('a');
+    a.href = cleanUrl;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    a.textContent = title;
+    a.style.color = '#0089ff';
+    a.style.textDecoration = 'underline';
+    a.style.textUnderlineOffset = '3px';
+    a.style.fontWeight = '500';
+
+    try {
+      visualEditorRef.current.focus();
+    } catch {}
+
+    let inserted = false;
+    const saved = savedRangeRef.current;
+
+    if (saved && (visualEditorRef.current === saved.commonAncestorContainer || visualEditorRef.current.contains(saved.commonAncestorContainer))) {
+      try {
+        saved.deleteContents();
+        saved.insertNode(a);
+        inserted = true;
+      } catch (err) {
+        console.warn('Could not insert link into saved range:', err);
+      }
+    }
+
+    if (!inserted) {
       const sel = window.getSelection();
-      const a = document.createElement('a');
-      a.href = cleanUrl;
-      a.target = '_blank';
-      a.rel = 'noopener noreferrer';
-      a.textContent = title;
       if (sel && sel.rangeCount > 0 && visualEditorRef.current.contains(sel.anchorNode)) {
-        const range = sel.getRangeAt(0);
-        range.deleteContents();
-        range.insertNode(a);
-        const newRange = document.createRange();
-        newRange.setStartAfter(a);
-        newRange.collapse(true);
+        try {
+          const range = sel.getRangeAt(0);
+          range.deleteContents();
+          range.insertNode(a);
+          inserted = true;
+        } catch (err) {
+          console.warn('Could not insert link into current selection:', err);
+        }
+      }
+    }
+
+    if (!inserted) {
+      let targetP: HTMLElement | null = null;
+      const lastChild = visualEditorRef.current.lastElementChild as HTMLElement | null;
+      if (lastChild && ['p', 'div'].includes(lastChild.tagName.toLowerCase())) {
+        targetP = lastChild;
+      } else {
+        targetP = document.createElement('p');
+        visualEditorRef.current.appendChild(targetP);
+      }
+      targetP.appendChild(a);
+    }
+
+    try {
+      const newRange = document.createRange();
+      newRange.setStartAfter(a);
+      newRange.collapse(true);
+      const sel = window.getSelection();
+      if (sel) {
         sel.removeAllRanges();
         sel.addRange(newRange);
-        savedRangeRef.current = newRange.cloneRange();
-      } else {
-        visualEditorRef.current.appendChild(a);
       }
-      pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
-    }
+      savedRangeRef.current = newRange.cloneRange();
+    } catch {}
+
+    pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
     setShowLinkModal(false);
     activeLinkElRef.current = null;
   };
 
   // Видалення посилання
   const handleRemoveLink = () => {
-    if (activeLinkElRef.current) {
-      const parent = activeLinkElRef.current.parentNode;
-      if (parent) {
-        const textNode = document.createTextNode(activeLinkElRef.current.textContent || '');
-        parent.replaceChild(textNode, activeLinkElRef.current);
-        if (visualEditorRef.current) {
-          pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
+    let targetLink: HTMLAnchorElement | null = activeLinkElRef.current;
+    if (!targetLink && savedRangeRef.current && visualEditorRef.current) {
+      let node: Node | null = savedRangeRef.current.commonAncestorContainer;
+      while (node && node !== visualEditorRef.current) {
+        if (node.nodeType === Node.ELEMENT_NODE && (node as HTMLElement).tagName.toLowerCase() === 'a') {
+          targetLink = node as HTMLAnchorElement;
+          break;
         }
+        node = node.parentNode;
+      }
+    }
+
+    if (targetLink && targetLink.parentNode) {
+      const textNode = document.createTextNode(targetLink.textContent || '');
+      targetLink.parentNode.replaceChild(textNode, targetLink);
+      if (visualEditorRef.current) {
+        pushToHistoryAndEmit(visualEditorRef.current.innerHTML);
       }
     }
     setShowLinkModal(false);
@@ -1842,7 +1934,7 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
           >
             <div
               onClick={(e) => e.stopPropagation()}
-              className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6 border border-neutral-200"
+              className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6 border border-neutral-200 text-black font-sans"
             >
               <div className="flex items-center justify-between pb-3 border-b border-neutral-100 mb-4">
                 <h3 className="font-semibold text-sm uppercase tracking-wider text-black flex items-center gap-2">
@@ -1852,7 +1944,7 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
                 <button
                   type="button"
                   onClick={() => setShowLinkModal(false)}
-                  className="text-neutral-400 hover:text-black cursor-pointer"
+                  className="text-neutral-400 hover:text-black cursor-pointer p-1"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -1860,7 +1952,7 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs uppercase tracking-wider text-neutral-500 mb-1.5">
+                  <label className="block text-xs uppercase tracking-wider text-neutral-600 mb-1.5 font-medium">
                     Текст посилання *
                   </label>
                   <input
@@ -1874,13 +1966,13 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
                         handleApplyLink();
                       }
                     }}
-                    className="w-full text-sm border border-neutral-300 rounded px-3 py-2 focus:border-black focus:outline-none"
-                    autoFocus
+                    className="w-full text-sm border border-neutral-300 rounded px-3 py-2 bg-white text-black placeholder-neutral-400 focus:border-[#0089ff] focus:ring-1 focus:ring-[#0089ff] focus:outline-none"
+                    autoFocus={!linkText}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs uppercase tracking-wider text-neutral-500 mb-1.5">
+                  <label className="block text-xs uppercase tracking-wider text-neutral-600 mb-1.5 font-medium">
                     URL адреса посилання *
                   </label>
                   <input
@@ -1894,7 +1986,8 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
                         handleApplyLink();
                       }
                     }}
-                    className="w-full text-sm border border-neutral-300 rounded px-3 py-2 focus:border-[#0089ff] focus:outline-none font-mono text-xs"
+                    className="w-full text-sm border border-neutral-300 rounded px-3 py-2 bg-white text-black placeholder-neutral-400 focus:border-[#0089ff] focus:ring-1 focus:ring-[#0089ff] focus:outline-none font-mono text-xs"
+                    autoFocus={Boolean(linkText)}
                   />
                 </div>
 
@@ -1902,6 +1995,7 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
                   {isEditingExistingLink ? (
                     <button
                       type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={handleRemoveLink}
                       className="px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
                       title="Видалити посилання і залишити звичайний текст"
@@ -1916,12 +2010,13 @@ export const RichArticleEditor: React.FC<RichArticleEditorProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowLinkModal(false)}
-                      className="px-4 py-2 text-xs font-medium text-neutral-600 hover:bg-neutral-100 rounded cursor-pointer"
+                      className="px-4 py-2 text-xs font-medium text-neutral-600 hover:bg-neutral-100 rounded cursor-pointer transition-colors"
                     >
                       Скасувати
                     </button>
                     <button
                       type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={handleApplyLink}
                       disabled={!linkUrl.trim()}
                       className="px-4 py-2 text-xs font-medium bg-[#0089ff] hover:bg-[#0070d6] text-white rounded transition-colors disabled:opacity-50 cursor-pointer shadow-xs"

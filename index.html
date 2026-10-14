@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -17,20 +17,26 @@
     <script>
       (function() {
         try {
-          var saved = localStorage.getItem('the_impart_theme_v1');
-          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-          if (saved === 'dark' || (!saved && prefersDark)) {
-            document.documentElement.classList.add('dark');
-            document.documentElement.setAttribute('data-theme', 'dark');
-          } else {
+          var p = window.location.pathname;
+          if (p === '/admin' || p === '/login') {
             document.documentElement.classList.remove('dark');
             document.documentElement.setAttribute('data-theme', 'light');
+            return;
+          }
+          var saved = localStorage.getItem('the_impart_theme_v1');
+          if (saved === 'light') {
+            document.documentElement.classList.remove('dark');
+            document.documentElement.setAttribute('data-theme', 'light');
+          } else {
+            // Темна тема є основною за замовчуванням
+            document.documentElement.classList.add('dark');
+            document.documentElement.setAttribute('data-theme', 'dark');
           }
         } catch (e) {}
       })();
     </script>
   </head>
-  <body>
+  <body class="bg-[#222222] text-[#cbcbcb]">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

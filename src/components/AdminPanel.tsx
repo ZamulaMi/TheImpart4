@@ -711,7 +711,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     : [];
 
   return (
-    <div className="min-h-screen bg-white text-black font-sans flex flex-col">
+    <div className="min-h-screen bg-white text-black font-sans flex flex-col light" data-theme="light">
       {/* Верхня панель адмінки */}
       <header className="border-b border-neutral-100 bg-white sticky top-0 z-30 px-6 sm:px-12 py-5 flex items-center justify-between">
         <div className="flex items-center gap-3 sm:gap-4 flex-wrap">

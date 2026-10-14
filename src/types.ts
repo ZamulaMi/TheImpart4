@@ -43,6 +43,8 @@ export interface Article {
 
 export type UserRole = 'admin' | 'editor';
 
+export type SiteTheme = 'light' | 'dark';
+
 export interface AuthUser {
   username: string;
   displayName: string;

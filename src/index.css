@@ -1,7 +1,19 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark, .dark *));
+
 html {
   scrollbar-gutter: stable;
+}
+
+html.dark {
+  color-scheme: dark;
+  background-color: #222222;
+}
+
+html.dark body {
+  background-color: #222222;
+  color: #cbcbcb;
 }
 
 @keyframes titleSlideDown {
@@ -351,4 +363,161 @@ html {
   font-style: italic;
   display: block;
 }
+
+/* ========================================================================== */
+/* ТЕМНА ТЕМА: КОЛІРНА ГАМА ТА СТИЛІ ЕЛЕМЕНТІВ                                */
+/* ========================================================================== */
+
+/* Шапка та Футер: відсутність ліній розділення між header, body та footer */
+header,
+footer,
+.site-header,
+.site-footer {
+  border: none !important;
+  border-top: none !important;
+  border-bottom: none !important;
+  box-shadow: none !important;
+}
+
+/* Шапка та Футер: майже чорні, дуже темно-сірі HEX #111 */
+html.dark header,
+html.dark footer,
+html.dark .site-header,
+html.dark .site-footer {
+  background-color: #111111 !important;
+  color: #cbcbcb !important;
+  border: none !important;
+}
+
+/* Світліший колір посилань в статтях та редакторі для темної теми */
+html.dark .article-rendered-html a,
+html.dark .article-content a,
+html.dark .prose a,
+html.dark .article-link,
+html.dark [contenteditable="true"] a {
+  color: #85c1ff !important;
+  text-decoration-color: rgba(133, 193, 255, 0.45) !important;
+}
+html.dark .article-rendered-html a:hover,
+html.dark .article-content a:hover,
+html.dark .prose a:hover,
+html.dark .article-link:hover,
+html.dark [contenteditable="true"] a:hover {
+  color: #bde0fe !important;
+  text-decoration-color: #bde0fe !important;
+}
+
+/* Соціальні мережі у футері в темній темі */
+html.dark .footer-social-link,
+html.dark .footer-social-link:visited {
+  color: #888888 !important;
+}
+html.dark .footer-social-link:hover,
+html.dark .footer-social-link:focus,
+html.dark .footer-social-link:active {
+  color: #ffffff !important;
+}
+
+/* Заголовки статей у темній темі */
+html.dark [contenteditable="true"] h1,
+html.dark [contenteditable="true"] h2,
+html.dark .article-rendered-html h1,
+html.dark .article-rendered-html h2 {
+  color: #f5f5f5 !important;
+}
+
+html.dark [contenteditable="true"] h3,
+html.dark .article-rendered-html h3 {
+  color: #ececec !important;
+}
+
+html.dark [contenteditable="true"] h4,
+html.dark .article-rendered-html h4 {
+  color: #e0e0e0 !important;
+}
+
+/* Текст абзаців та списків у темній темі: HEX #cbcbcb */
+html.dark [contenteditable="true"] p,
+html.dark .article-rendered-html p,
+html.dark [contenteditable="true"] li,
+html.dark .article-rendered-html li {
+  color: #cbcbcb !important;
+}
+
+/* Цитати у темній темі */
+html.dark [contenteditable="true"] blockquote,
+html.dark .article-rendered-html blockquote {
+  border-left-color: #cbcbcb !important;
+  color: #e0e0e0 !important;
+  background-color: rgba(255, 255, 255, 0.03) !important;
+}
+
+/* Розділювачі у темній темі */
+html.dark [contenteditable="true"] hr,
+html.dark .article-rendered-html hr {
+  border-top-color: #333333 !important;
+}
+
+/* Вбудований код у темній темі */
+html.dark [contenteditable="true"] code,
+html.dark .article-rendered-html code {
+  background: #181818 !important;
+  color: #e5e5e5 !important;
+  border-color: #333333 !important;
+}
+
+/* Таблиці у темній темі */
+html.dark .article-table {
+  border-color: #333333 !important;
+}
+
+html.dark .article-table th {
+  background-color: #161616 !important;
+  border-color: #333333 !important;
+  color: #f5f5f5 !important;
+}
+
+html.dark .article-table td {
+  border-color: #333333 !important;
+  color: #cbcbcb !important;
+}
+
+html.dark .article-table tbody tr:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.03) !important;
+}
+
+/* Підписи до зображень у темній темі */
+html.dark [contenteditable="true"] figcaption,
+html.dark .article-rendered-html figcaption {
+  color: #999999 !important;
+}
+
+/* Callout блоки в темній темі */
+html.dark .callout-info {
+  background-color: rgba(14, 116, 144, 0.22) !important;
+  color: #e0f2fe !important;
+}
+html.dark .callout-warning {
+  background-color: rgba(161, 98, 7, 0.22) !important;
+  color: #fef08a !important;
+}
+html.dark .callout-success {
+  background-color: rgba(4, 120, 87, 0.22) !important;
+  color: #a7f3d0 !important;
+}
+html.dark .callout-danger {
+  background-color: rgba(185, 28, 28, 0.22) !important;
+  color: #fecaca !important;
+}
+html.dark .callout-dark {
+  background-color: #141414 !important;
+  border-left-color: #555555 !important;
+  color: #cbcbcb !important;
+}
+html.dark .callout-quote {
+  background-color: #1a1a1a !important;
+  border-left-color: #777777 !important;
+  color: #cbcbcb !important;
+}
+
 

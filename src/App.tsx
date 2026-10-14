@@ -14,7 +14,9 @@ import {
   UserRole,
   SitePagesData,
   DEFAULT_PAGES_DATA,
+  SiteTheme,
 } from './types';
+import { ThemeToggle } from './components/ThemeToggle';
 import { AdminPanel } from './components/AdminPanel';
 import { AdminLogin } from './components/AdminLogin';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -56,6 +58,7 @@ const STORAGE_KEY = 'the_impart_articles_v1';
 const LANG_STORAGE_KEY = 'the_impart_lang_v1';
 const SOCIAL_STORAGE_KEY = 'the_impart_social_links_v1';
 const PAGES_STORAGE_KEY = 'the_impart_static_pages_v1';
+const THEME_STORAGE_KEY = 'the_impart_theme_v1';
 
 const DEFAULT_SOCIAL_LINKS: SiteSocialLinks = {
   ua: {
@@ -194,7 +197,7 @@ function ArticleCard({ article, siteLang, aspectRatio, isHero = false, onSelect 
         onSelect(article.id);
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }}
-      className={`group relative cursor-pointer overflow-hidden rounded-xl bg-neutral-900 shadow-md hover:shadow-xl transition-all duration-500 flex flex-col justify-end animate-card-fade-in ${aspectClass}`}
+      className={`group relative cursor-pointer overflow-hidden rounded-xl bg-neutral-900 border border-transparent dark:border-[#333333]/80 shadow-md hover:shadow-xl transition-all duration-500 flex flex-col justify-end animate-card-fade-in ${aspectClass}`}
     >
       {/* Фонове фото */}
       {article.coverImage ? (
@@ -404,6 +407,42 @@ export default function App() {
     }
     return 'ua';
   });
+
+  const [siteTheme, setSiteTheme] = useState<SiteTheme>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem(THEME_STORAGE_KEY);
+      if (saved === 'dark' || saved === 'light') return saved;
+      if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        return 'dark';
+      }
+    }
+    return 'light';
+  });
+
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      if (siteTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+        document.documentElement.setAttribute('data-theme', 'dark');
+        document.body.style.backgroundColor = '#222222';
+        document.body.style.color = '#cbcbcb';
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.setAttribute('data-theme', 'light');
+        document.body.style.backgroundColor = '#ffffff';
+        document.body.style.color = '#000000';
+      }
+      try {
+        localStorage.setItem(THEME_STORAGE_KEY, siteTheme);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [siteTheme]);
+
+  const toggleTheme = () => {
+    setSiteTheme((prev) => (prev === 'light' ? 'dark' : 'light'));
+  };
 
   const [socialLinks, setSocialLinks] = useState<SiteSocialLinks>(() => {
     if (typeof window !== 'undefined') {
@@ -1107,7 +1146,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-white text-black flex flex-col justify-between">
+    <div className="min-h-screen w-full bg-white dark:bg-[#222222] text-black dark:text-[#cbcbcb] flex flex-col justify-between transition-colors duration-200">
       {/* Модальне вікно пошуку з напівпрозорим бекдропом і блюром */}
       <SearchModal
         isOpen={isSearchOpen}
@@ -1121,7 +1160,7 @@ export default function App() {
       />
 
       {/* Шапка (Header) - адаптивна: на мобільних згорнутий вибір рубрик (кнопка зліва, назва по центру, пошук справа) */}
-      <header className="w-full bg-white/95 backdrop-blur-md sticky top-0 z-40 py-3.5 sm:py-4 border-b border-neutral-100/60 transition-all">
+      <header className="site-header w-full bg-white/95 dark:bg-[#111111]/95 backdrop-blur-md sticky top-0 z-40 py-3.5 sm:py-4 border-none transition-all">
         <div className="relative w-[92%] sm:w-[90%] md:w-[calc(26/34*100%)] mx-auto flex items-center justify-between min-h-[38px]">
           {/* Ліва сторона:
               - На мобільних (< md): кнопка виклику меню рубрик
@@ -1133,7 +1172,7 @@ export default function App() {
               type="button"
               onClick={() => setIsMobileMenuOpen(true)}
               aria-label="Відкрити меню рубрик"
-              className="md:hidden flex items-center justify-center w-10 h-10 -ml-2 text-black hover:opacity-60 active:scale-95 transition-all cursor-pointer focus:outline-none"
+              className="md:hidden flex items-center justify-center w-10 h-10 -ml-2 text-black dark:text-[#cbcbcb] hover:opacity-60 active:scale-95 transition-all cursor-pointer focus:outline-none"
             >
               <Menu className="w-5 h-5 stroke-[2]" />
             </button>
@@ -1147,7 +1186,7 @@ export default function App() {
                   setActiveSearchFilter(null);
                 }}
                 aria-label="The Impart — Головна сторінка"
-                className="animate-title-slide-down block text-xl sm:text-2xl font-medium tracking-tight text-black hover:opacity-75 transition-opacity select-none text-left cursor-pointer focus:outline-none"
+                className="animate-title-slide-down block text-xl sm:text-2xl font-medium tracking-tight text-black dark:text-[#ffffff] hover:opacity-75 transition-opacity select-none text-left cursor-pointer focus:outline-none"
                 style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
               >
                 The Impart
@@ -1169,7 +1208,7 @@ export default function App() {
                 setIsMobileMenuOpen(false);
               }}
               aria-label="The Impart — Головна сторінка"
-              className="block text-xl font-medium tracking-tight text-black hover:opacity-75 transition-opacity select-none text-center cursor-pointer focus:outline-none whitespace-nowrap"
+              className="block text-xl font-medium tracking-tight text-black dark:text-[#ffffff] hover:opacity-75 transition-opacity select-none text-center cursor-pointer focus:outline-none whitespace-nowrap"
               style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
             >
               The Impart
@@ -1190,8 +1229,8 @@ export default function App() {
                   onClick={() => handleSelectSection(sec.id)}
                   className={`group relative py-1 text-sm md:text-[15px] transition-colors duration-250 cursor-pointer focus:outline-none ${
                     isActive
-                      ? 'text-black font-bold tracking-normal'
-                      : 'text-neutral-800 hover:text-black font-semibold tracking-normal'
+                      ? 'text-black dark:text-[#ffffff] font-bold tracking-normal'
+                      : 'text-neutral-800 dark:text-[#cbcbcb] hover:text-black dark:hover:text-[#ffffff] font-semibold tracking-normal'
                   }`}
                 >
                   <span className="relative z-10 transition-transform duration-200 inline-block group-hover:-translate-y-[0.5px]">
@@ -1199,7 +1238,7 @@ export default function App() {
                   </span>
                   {/* Мінімалістична лінія-підкреслення з плавною анімацією розширення */}
                   <span
-                    className={`absolute bottom-0 left-0 h-[2px] bg-black transition-all duration-300 ease-out ${
+                    className={`absolute bottom-0 left-0 h-[2px] bg-black dark:bg-[#ffffff] transition-all duration-300 ease-out ${
                       isActive ? 'w-full' : 'w-0 group-hover:w-full'
                     }`}
                   />
@@ -1208,16 +1247,25 @@ export default function App() {
             })}
           </nav>
 
-          {/* Права сторона: кнопка пошуку (і на мобільних, і на десктопі) */}
-          <div className="z-20 flex items-center justify-end">
+          {/* Права сторона: кнопка пошуку (і на мобільних, і на десктопі) та перемикач теми на десктопі (біля пошуку, з правої сторони) */}
+          <div className="z-20 flex items-center justify-end gap-1">
             <button
               type="button"
               onClick={() => setIsSearchOpen(true)}
-              aria-label="Пошук"
-              className="text-black hover:opacity-60 active:scale-95 transition-all cursor-pointer focus:outline-none flex items-center justify-center w-10 h-10 -mr-2"
+              aria-label={siteLang === 'en' ? 'Search' : 'Пошук'}
+              className="text-black dark:text-[#cbcbcb] hover:opacity-60 active:scale-95 transition-all cursor-pointer focus:outline-none flex items-center justify-center w-10 h-10 md:mr-0 -mr-2"
             >
               <Search className="w-5 h-5 stroke-[1.8]" />
             </button>
+
+            {/* Десктопний перемикач теми: біля пошуку, з правої сторони */}
+            <div className="hidden md:flex items-center -mr-2">
+              <ThemeToggle
+                theme={siteTheme}
+                onToggle={toggleTheme}
+                siteLang={siteLang}
+              />
+            </div>
           </div>
         </div>
       </header>
@@ -1232,6 +1280,8 @@ export default function App() {
         }}
         siteLang={siteLang}
         onSwitchLang={handleSetLang}
+        theme={siteTheme}
+        onToggleTheme={toggleTheme}
         onOpenSearch={() => setIsSearchOpen(true)}
         onNavigateToPage={(slug) => navigateToPage(slug)}
       />
@@ -1275,21 +1325,21 @@ export default function App() {
                 return (
                   <div>
                     {/* Заголовок результатів пошуку та кнопка скидання */}
-                    <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-neutral-100 gap-4">
+                    <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-neutral-100 dark:border-[#333333] gap-4">
                       <div>
                         <h1
-                          className="text-2xl sm:text-3xl font-medium tracking-tight text-black"
+                          className="text-2xl sm:text-3xl font-medium tracking-tight text-black dark:text-[#ffffff]"
                           style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
                         >
                           {siteLang === 'en' ? 'Search Results' : 'Результати пошуку'}
                         </h1>
-                        <p className="text-xs sm:text-sm text-neutral-500 mt-1.5 flex flex-wrap items-center gap-2">
-                          <Search className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                        <p className="text-xs sm:text-sm text-neutral-500 dark:text-[#888888] mt-1.5 flex flex-wrap items-center gap-2">
+                          <Search className="w-3.5 h-3.5 text-neutral-400 dark:text-[#777777] shrink-0" />
                           <span>
                             {siteLang === 'en' ? 'Query:' : 'Запит:'}{' '}
-                            <strong className="text-black font-semibold">«{activeSearchFilter.query}»</strong>
+                            <strong className="text-black dark:text-[#ffffff] font-semibold">«{activeSearchFilter.query}»</strong>
                           </span>
-                          <span className="text-neutral-300">•</span>
+                          <span className="text-neutral-300 dark:text-neutral-700">•</span>
                           <span>
                             {siteLang === 'en'
                               ? `${searchResultsArticles.length} ${
@@ -1299,16 +1349,16 @@ export default function App() {
                           </span>
                           {hasSearchTypoMatches && (
                             <>
-                              <span className="text-neutral-300">•</span>
-                              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-neutral-600 bg-neutral-100/90 border border-neutral-200/70 px-2 py-0.5 rounded-full font-sans">
-                                <Sparkles className="w-3 h-3 text-neutral-500" />
+                              <span className="text-neutral-300 dark:text-neutral-700">•</span>
+                              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-neutral-600 dark:text-[#a0a0a0] bg-neutral-100/90 dark:bg-[#1a1a1a] border border-neutral-200/70 dark:border-[#333333] px-2 py-0.5 rounded-full font-sans">
+                                <Sparkles className="w-3 h-3 text-neutral-500 dark:text-[#888888]" />
                                 <span>{siteLang === 'en' ? 'Typo-tolerant' : 'З урахуванням одруківок'}</span>
                               </span>
                             </>
                           )}
                           {totalSearchPages > 1 && (
                             <>
-                              <span className="text-neutral-300">•</span>
+                              <span className="text-neutral-300 dark:text-neutral-700">•</span>
                               <span>
                                 {siteLang === 'en'
                                   ? `Page ${safeSearchPage} of ${totalSearchPages}`
@@ -1322,7 +1372,7 @@ export default function App() {
                       <button
                         type="button"
                         onClick={handleResetSearch}
-                        className="self-start sm:self-auto inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-neutral-600 hover:text-black bg-neutral-50 hover:bg-neutral-100 border border-neutral-200 px-3.5 py-2 rounded transition-colors cursor-pointer"
+                        className="self-start sm:self-auto inline-flex items-center gap-1.5 text-xs uppercase tracking-wider text-neutral-600 dark:text-[#cbcbcb] hover:text-black dark:hover:text-white bg-neutral-50 dark:bg-[#1c1c1c] hover:bg-neutral-100 dark:hover:bg-[#252525] border border-neutral-200 dark:border-[#333333] px-3.5 py-2 rounded transition-colors cursor-pointer"
                       >
                         <X className="w-3.5 h-3.5" />
                         <span>{siteLang === 'en' ? 'Reset search' : 'Скинути пошук'}</span>
@@ -1331,12 +1381,12 @@ export default function App() {
 
                     {searchResultsArticles.length === 0 ? (
                       <div className="py-20 text-center max-w-md mx-auto">
-                        <p className="text-neutral-400 font-serif italic text-lg sm:text-xl mb-2">
+                        <p className="text-neutral-400 dark:text-[#777777] font-serif italic text-lg sm:text-xl mb-2">
                           {siteLang === 'en'
                             ? 'No articles match your search query.'
                             : 'За вашим запитом не знайдено опублікованих статей.'}
                         </p>
-                        <p className="text-xs text-neutral-500 mb-6 font-sans">
+                        <p className="text-xs text-neutral-500 dark:text-[#888888] mb-6 font-sans">
                           {siteLang === 'en'
                             ? 'Try searching with simpler or different keywords.'
                             : 'Спробуйте використати інші ключові слова або спростити запит.'}
@@ -1344,7 +1394,7 @@ export default function App() {
                         <button
                           type="button"
                           onClick={handleResetSearch}
-                          className="text-xs uppercase tracking-wider text-black underline underline-offset-4 cursor-pointer hover:opacity-75"
+                          className="text-xs uppercase tracking-wider text-black dark:text-[#ffffff] underline underline-offset-4 cursor-pointer hover:opacity-75"
                         >
                           {siteLang === 'en' ? 'Return to all articles' : 'Повернутися до всіх статей'}
                         </button>
@@ -1417,7 +1467,7 @@ export default function App() {
                         {totalSearchPages > 1 && (
                           <nav
                             aria-label="Нумерація сторінок результатів пошуку"
-                            className="mt-12 sm:mt-16 pt-8 border-t border-neutral-100 flex items-center justify-center gap-2 sm:gap-3"
+                            className="mt-12 sm:mt-16 pt-8 border-t border-neutral-100 dark:border-[#333333] flex items-center justify-center gap-2 sm:gap-3"
                           >
                             <button
                               type="button"
@@ -1426,8 +1476,8 @@ export default function App() {
                               aria-label="Попередня сторінка"
                               className={`px-3 py-1.5 text-xs sm:text-sm tracking-wider transition-colors cursor-pointer focus:outline-none ${
                                 safeSearchPage <= 1
-                                  ? 'text-neutral-300 cursor-not-allowed'
-                                  : 'text-neutral-600 hover:text-black'
+                                  ? 'text-neutral-300 dark:text-neutral-700 cursor-not-allowed'
+                                  : 'text-neutral-600 dark:text-[#cbcbcb] hover:text-black dark:hover:text-white'
                               }`}
                             >
                               ←
@@ -1443,8 +1493,8 @@ export default function App() {
                                   aria-current={isCurrent ? 'page' : undefined}
                                   className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center text-xs sm:text-sm transition-all duration-200 cursor-pointer focus:outline-none ${
                                     isCurrent
-                                      ? 'bg-black text-white font-medium shadow-xs'
-                                      : 'text-neutral-600 hover:text-black hover:bg-neutral-100'
+                                      ? 'bg-black dark:bg-[#333333] text-white dark:text-[#ffffff] font-medium shadow-xs'
+                                      : 'text-neutral-600 dark:text-[#cbcbcb] hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-[#252525]'
                                   }`}
                                 >
                                   {p}
@@ -1459,8 +1509,8 @@ export default function App() {
                               aria-label="Наступна сторінка"
                               className={`px-3 py-1.5 text-xs sm:text-sm tracking-wider transition-colors cursor-pointer focus:outline-none ${
                                 safeSearchPage >= totalSearchPages
-                                  ? 'text-neutral-300 cursor-not-allowed'
-                                  : 'text-neutral-600 hover:text-black'
+                                  ? 'text-neutral-300 dark:text-neutral-700 cursor-not-allowed'
+                                  : 'text-neutral-600 dark:text-[#cbcbcb] hover:text-black dark:hover:text-white'
                               }`}
                             >
                               →
@@ -1514,15 +1564,15 @@ export default function App() {
                 return (
                   <div className="space-y-6 sm:space-y-8 animate-fade-in">
                     {/* Заголовок поточної рубрики */}
-                    <div className="flex items-baseline justify-between border-b border-neutral-100 pb-3">
+                    <div className="flex items-baseline justify-between border-b border-neutral-100 dark:border-[#333333] pb-3">
                       <div className="flex items-baseline gap-3">
                         <h1
-                          className="text-2xl sm:text-3xl font-medium tracking-tight text-black"
+                          className="text-2xl sm:text-3xl font-medium tracking-tight text-black dark:text-[#ffffff]"
                           style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
                         >
                           {sectionTitle}
                         </h1>
-                        <span className="text-xs text-neutral-400 font-light tracking-wide">
+                        <span className="text-xs text-neutral-400 dark:text-[#777777] font-light tracking-wide">
                           {categoryArticles.length}{' '}
                           {siteLang === 'en'
                             ? categoryArticles.length === 1
@@ -1540,7 +1590,7 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => handleSelectSection(null)}
-                        className="text-xs text-neutral-500 hover:text-black transition-colors cursor-pointer underline underline-offset-4"
+                        className="text-xs text-neutral-500 dark:text-[#888888] hover:text-black dark:hover:text-[#ffffff] transition-colors cursor-pointer underline underline-offset-4"
                       >
                         {siteLang === 'en' ? 'All materials' : 'Всі матеріали'}
                       </button>
@@ -1548,11 +1598,11 @@ export default function App() {
 
                     {isLoading ? (
                       <div className="py-24 text-center">
-                        <div className="inline-block w-5 h-5 border-2 border-neutral-300 border-t-black rounded-full animate-spin" />
+                        <div className="inline-block w-5 h-5 border-2 border-neutral-300 dark:border-neutral-700 border-t-black dark:border-t-white rounded-full animate-spin" />
                       </div>
                     ) : categoryArticles.length === 0 ? (
                       <div className="py-24 text-center max-w-md mx-auto">
-                        <p className="text-neutral-400 font-serif italic text-lg sm:text-xl mb-3">
+                        <p className="text-neutral-400 dark:text-[#777777] font-serif italic text-lg sm:text-xl mb-3">
                           {siteLang === 'en'
                             ? 'No articles published in this category yet.'
                             : 'У цій рубриці наразі немає опублікованих статей.'}
@@ -1560,7 +1610,7 @@ export default function App() {
                         <button
                           type="button"
                           onClick={() => handleSelectSection(null)}
-                          className="text-xs uppercase tracking-widest text-black underline underline-offset-4 hover:opacity-70 transition-opacity cursor-pointer"
+                          className="text-xs uppercase tracking-widest text-black dark:text-[#ffffff] underline underline-offset-4 hover:opacity-70 transition-opacity cursor-pointer"
                         >
                           {siteLang === 'en' ? 'Return to all materials' : 'Повернутися до всіх матеріалів'}
                         </button>
@@ -1633,7 +1683,7 @@ export default function App() {
                         {totalCategoryPages > 1 && (
                           <nav
                             aria-label="Нумерація сторінок"
-                            className="mt-12 sm:mt-16 pt-8 border-t border-neutral-100 flex items-center justify-center gap-2 sm:gap-3"
+                            className="mt-12 sm:mt-16 pt-8 border-t border-neutral-100 dark:border-[#333333] flex items-center justify-center gap-2 sm:gap-3"
                           >
                             <button
                               type="button"
@@ -1642,8 +1692,8 @@ export default function App() {
                               aria-label="Попередня сторінка"
                               className={`px-3 py-1.5 text-xs sm:text-sm tracking-wider transition-colors cursor-pointer focus:outline-none ${
                                 safePage <= 1
-                                  ? 'text-neutral-300 cursor-not-allowed'
-                                  : 'text-neutral-600 hover:text-black'
+                                  ? 'text-neutral-300 dark:text-neutral-700 cursor-not-allowed'
+                                  : 'text-neutral-600 dark:text-[#cbcbcb] hover:text-black dark:hover:text-white'
                               }`}
                             >
                               ←
@@ -1659,8 +1709,8 @@ export default function App() {
                                   aria-current={isCurrent ? 'page' : undefined}
                                   className={`w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center text-xs sm:text-sm transition-all duration-200 cursor-pointer focus:outline-none ${
                                     isCurrent
-                                      ? 'bg-black text-white font-medium shadow-xs'
-                                      : 'text-neutral-600 hover:text-black hover:bg-neutral-100'
+                                      ? 'bg-black dark:bg-[#333333] text-white dark:text-[#ffffff] font-medium shadow-xs'
+                                      : 'text-neutral-600 dark:text-[#cbcbcb] hover:text-black dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-[#252525]'
                                   }`}
                                 >
                                   {p}
@@ -1675,8 +1725,8 @@ export default function App() {
                               aria-label="Наступна сторінка"
                               className={`px-3 py-1.5 text-xs sm:text-sm tracking-wider transition-colors cursor-pointer focus:outline-none ${
                                 safePage >= totalCategoryPages
-                                  ? 'text-neutral-300 cursor-not-allowed'
-                                  : 'text-neutral-600 hover:text-black'
+                                  ? 'text-neutral-300 dark:text-neutral-700 cursor-not-allowed'
+                                  : 'text-neutral-600 dark:text-[#cbcbcb] hover:text-black dark:hover:text-white'
                               }`}
                             >
                               →
@@ -1873,17 +1923,17 @@ export default function App() {
                             <button
                               type="button"
                               onClick={() => setVisibleCount((prev) => prev + 10)}
-                              className="group relative inline-flex items-center gap-2.5 py-2.5 px-3 text-xs sm:text-[13px] tracking-[0.16em] uppercase font-semibold text-neutral-800 hover:text-black transition-colors duration-300 cursor-pointer focus:outline-none"
+                              className="group relative inline-flex items-center gap-2.5 py-2.5 px-3 text-xs sm:text-[13px] tracking-[0.16em] uppercase font-semibold text-neutral-800 dark:text-[#cbcbcb] hover:text-black dark:hover:text-[#ffffff] transition-colors duration-300 cursor-pointer focus:outline-none"
                               aria-label={siteLang === 'en' ? 'Show more articles' : 'Показати більше статей'}
                             >
                               <span className="font-semibold">{siteLang === 'en' ? 'Show more' : 'Показати більше'}</span>
-                              <span className="text-neutral-600 group-hover:text-black group-hover:translate-y-0.5 transition-all duration-300 text-sm font-bold">
+                              <span className="text-neutral-600 dark:text-[#999999] group-hover:text-black dark:group-hover:text-[#ffffff] group-hover:translate-y-0.5 transition-all duration-300 text-sm font-bold">
                                 ↓
                               </span>
-                              {/* Тонка мінімалістична лінія знизу, що темнішає при наведенні */}
-                              <span className="absolute bottom-0 left-0 w-full h-[1.5px] bg-neutral-300 group-hover:bg-black transition-colors duration-300" />
+                              {/* Тонка мінімалістична лінія знизу, що змінюється при наведенні */}
+                              <span className="absolute bottom-0 left-0 w-full h-[1.5px] bg-neutral-300 dark:bg-[#444444] group-hover:bg-black dark:group-hover:bg-[#ffffff] transition-colors duration-300" />
                             </button>
-                            <span className="mt-2 text-[11px] text-neutral-500 font-medium tracking-wide">
+                            <span className="mt-2 text-[11px] text-neutral-500 dark:text-[#777777] font-medium tracking-wide">
                               {Math.min(visibleCount, basePublishedArticles.length)} {siteLang === 'en' ? 'of' : 'з'}{' '}
                               {basePublishedArticles.length}
                             </span>
@@ -1898,18 +1948,18 @@ export default function App() {
           )}
         </div>
 
-        {/* Низ body з градієнтним контейнером для м'якого відділення від футера */}
-        <div className="w-full h-16 sm:h-24 bg-gradient-to-b from-white to-neutral-100 mt-12" />
+        {/* Градієнтний блок-розділювач у нижній частині body для м'якого переходу до футера */}
+        <div className="w-full h-16 sm:h-24 bg-gradient-to-b from-white to-neutral-100 dark:from-[#222222] dark:to-[#111111] mt-8 sm:mt-12 transition-colors duration-200 pointer-events-none select-none" />
       </main>
 
-      {/* Футер */}
-      <footer className="w-full bg-white py-10 sm:py-12 border-t border-neutral-100">
+      {/* Футер: дуже темно-сірий майже чорний HEX #111 без лінії розділення */}
+      <footer className="site-footer w-full bg-white dark:bg-[#111111] py-10 sm:py-12 border-none transition-colors duration-200">
         <div className="w-[92%] sm:w-[90%] md:w-[calc(26/34*100%)] mx-auto flex flex-col sm:flex-row sm:items-end justify-between gap-6">
           <div className="flex flex-col items-start">
-            <span className="text-base sm:text-lg font-normal tracking-normal text-black font-sans select-none">
+            <span className="text-base sm:text-lg font-normal tracking-normal text-black dark:text-[#ffffff] font-sans select-none">
               The Impart
             </span>
-            <p className="text-xs text-neutral-400 mt-1">
+            <p className="text-xs text-neutral-400 dark:text-[#777777] mt-1">
               {siteLang === 'en'
                 ? 'A knowledge space for tech and culture.'
                 : 'Простір знань про технології та культуру.'}
@@ -1920,21 +1970,21 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => navigateToPage('about')}
-                className="text-neutral-500 hover:text-black transition-colors cursor-pointer underline-offset-4 hover:underline"
+                className="text-neutral-500 dark:text-[#999999] hover:text-black dark:hover:text-[#ffffff] transition-colors cursor-pointer underline-offset-4 hover:underline"
               >
                 {siteLang === 'en' ? 'About Project' : 'Про проєкт'}
               </button>
-              <span className="text-neutral-300">•</span>
+              <span className="text-neutral-300 dark:text-neutral-700">•</span>
               <button
                 type="button"
                 onClick={() => navigateToPage('contacts')}
-                className="text-neutral-500 hover:text-black transition-colors cursor-pointer underline-offset-4 hover:underline"
+                className="text-neutral-500 dark:text-[#999999] hover:text-black dark:hover:text-[#ffffff] transition-colors cursor-pointer underline-offset-4 hover:underline"
               >
                 {siteLang === 'en' ? 'Contacts' : 'Контакти'}
               </button>
             </div>
 
-            <div className="mt-3.5 flex items-center gap-4 text-neutral-400">
+            <div className="mt-3.5 flex items-center gap-4 text-neutral-400 dark:text-[#888888]">
               {/* Telegram */}
               {socialLinks[siteLang]?.telegram && (
                 <a
@@ -1942,7 +1992,7 @@ export default function App() {
                   target="_blank"
                   rel="noreferrer"
                   aria-label="Telegram"
-                  className="footer-social-link text-neutral-400 hover:text-black transition-colors duration-200"
+                  className="footer-social-link text-neutral-400 dark:text-[#888888] hover:text-black dark:hover:text-[#ffffff] transition-colors duration-200"
                 >
                   <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
                     <path d="M21.927 3.513a1.498 1.498 0 0 0-1.505-.288L2.348 10.38c-1.048.423-1.042 1.34-.191 1.602l4.639 1.448 10.741-6.777c.507-.308.972-.143.59.196l-8.704 7.854-.319 4.768c.467 0 .673-.214.935-.467l2.247-2.185 4.675 3.453c.861.475 1.482.23 1.696-.8l3.068-14.457c.314-1.26-.481-1.831-1.308-1.442z" />
@@ -1957,7 +2007,7 @@ export default function App() {
                   target="_blank"
                   rel="noreferrer"
                   aria-label="Instagram"
-                  className="footer-social-link text-neutral-400 hover:text-black transition-colors duration-200"
+                  className="footer-social-link text-neutral-400 dark:text-[#888888] hover:text-black dark:hover:text-[#ffffff] transition-colors duration-200"
                 >
                   <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
                     <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
@@ -1972,7 +2022,7 @@ export default function App() {
                   target="_blank"
                   rel="noreferrer"
                   aria-label="X (Twitter)"
-                  className="footer-social-link text-neutral-400 hover:text-black transition-colors duration-200"
+                  className="footer-social-link text-neutral-400 dark:text-[#888888] hover:text-black dark:hover:text-[#ffffff] transition-colors duration-200"
                 >
                   <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
                     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
@@ -1987,7 +2037,7 @@ export default function App() {
                   target="_blank"
                   rel="noreferrer"
                   aria-label="YouTube"
-                  className="footer-social-link text-neutral-400 hover:text-black transition-colors duration-200"
+                  className="footer-social-link text-neutral-400 dark:text-[#888888] hover:text-black dark:hover:text-[#ffffff] transition-colors duration-200"
                 >
                   <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
                     <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
@@ -1995,14 +2045,14 @@ export default function App() {
                 </a>
               )}
 
-              {/* Threads (остання у списку з чистим мінімалістичним силуетом) */}
+              {/* Threads */}
               {socialLinks[siteLang]?.threads && (
                 <a
                   href={socialLinks[siteLang].threads}
                   target="_blank"
                   rel="noreferrer"
                   aria-label="Threads"
-                  className="footer-social-link text-neutral-400 hover:text-black transition-colors duration-200"
+                  className="footer-social-link text-neutral-400 dark:text-[#888888] hover:text-black dark:hover:text-[#ffffff] transition-colors duration-200"
                 >
                   <svg className="w-5 h-5 fill-none stroke-current stroke-[1.8] stroke-linecap-round stroke-linejoin-round" viewBox="0 0 24 24">
                     <path d="M19.25 12c0 4.5-3.25 8.25-8 8.25-4.5 0-7.75-3.5-7.75-8.25S6.75 3.75 12 3.75c4.75 0 7.5 3 7.75 7.25M16 11.25c0 3-1.75 4.5-4 4.5s-3.75-1.5-3.75-3.75S9.75 8.25 12 8.25c2.75 0 4 2 4 4.5v1.25c0 1.5-.75 2.5-2 2.5s-2-.75-2-2.25" />
@@ -2020,21 +2070,21 @@ export default function App() {
                 onClick={() => handleSetLang('ua')}
                 className={`py-1 transition-colors cursor-pointer ${
                   siteLang === 'ua'
-                    ? 'font-medium text-black'
-                    : 'text-neutral-400 hover:text-black'
+                    ? 'font-medium text-black dark:text-[#ffffff]'
+                    : 'text-neutral-400 dark:text-[#777777] hover:text-black dark:hover:text-[#ffffff]'
                 }`}
                 title="Українська версія"
               >
                 UA
               </button>
-              <span className="mx-2 text-neutral-300">/</span>
+              <span className="mx-2 text-neutral-300 dark:text-neutral-700">/</span>
               <button
                 type="button"
                 onClick={() => handleSetLang('en')}
                 className={`py-1 transition-colors cursor-pointer ${
                   siteLang === 'en'
-                    ? 'font-medium text-black'
-                    : 'text-neutral-400 hover:text-black'
+                    ? 'font-medium text-black dark:text-[#ffffff]'
+                    : 'text-neutral-400 dark:text-[#777777] hover:text-black dark:hover:text-[#ffffff]'
                 }`}
                 title="English version"
               >
@@ -2042,7 +2092,7 @@ export default function App() {
               </button>
             </div>
 
-            <div className="flex items-center gap-3 text-xs text-neutral-400 font-sans">
+            <div className="flex items-center gap-3 text-xs text-neutral-400 dark:text-[#777777] font-sans">
               <span>© {new Date().getFullYear()} The Impart. All rights reserved.</span>
             </div>
           </div>

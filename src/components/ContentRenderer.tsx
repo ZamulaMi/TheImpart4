@@ -199,11 +199,7 @@ export const renderInlineFormatting = (text: string): React.ReactNode => {
             href={url}
             target={isExternal ? '_blank' : undefined}
             rel={isExternal ? 'noopener noreferrer' : undefined}
-            className="inline-flex items-baseline gap-1 font-medium underline underline-offset-3 decoration-1 transition-colors cursor-pointer"
-            style={{
-              color: '#0089ff',
-              textDecorationColor: 'rgba(0, 137, 255, 0.45)',
-            }}
+            className="inline-flex items-baseline gap-1 font-medium underline underline-offset-3 decoration-1 transition-colors cursor-pointer text-[#0089ff] dark:text-[#58b9ff] hover:text-[#0070d6] dark:hover:text-[#9cd5ff] decoration-[rgba(0,137,255,0.45)] dark:decoration-[rgba(88,185,255,0.5)]"
           >
             <span>{renderInlineFormatting(label)}</span>
             {isExternal && <ExternalLink className="w-3 h-3 self-center opacity-70 inline" />}
@@ -218,7 +214,7 @@ export const renderInlineFormatting = (text: string): React.ReactNode => {
     ) {
       const inner = fullMatch.startsWith('**') ? fullMatch.slice(2, -2) : fullMatch.slice(3, -4);
       parts.push(
-        <strong key={key} className="font-bold text-neutral-950">
+        <strong key={key} className="font-bold text-neutral-950 dark:text-[#ffffff]">
           {renderInlineFormatting(inner)}
         </strong>
       );
@@ -242,7 +238,7 @@ export const renderInlineFormatting = (text: string): React.ReactNode => {
     ) {
       const inner = fullMatch.startsWith('~~') ? fullMatch.slice(2, -2) : fullMatch.slice(3, -4);
       parts.push(
-        <s key={key} className="line-through text-neutral-500">
+        <s key={key} className="line-through text-neutral-400 dark:text-neutral-500">
           {renderInlineFormatting(inner)}
         </s>
       );
@@ -264,7 +260,7 @@ export const renderInlineFormatting = (text: string): React.ReactNode => {
       parts.push(
         <code
           key={key}
-          className="font-mono text-[0.88em] bg-neutral-100 text-neutral-900 border border-neutral-200 rounded px-1.5 py-0.5"
+          className="font-mono text-[0.88em] bg-neutral-100 dark:bg-[#181818] text-neutral-900 dark:text-[#e5e5e5] border border-neutral-200 dark:border-[#333333] rounded px-1.5 py-0.5"
         >
           {fullMatch.slice(1, -1)}
         </code>
@@ -580,6 +576,23 @@ export function parseContentToBlocks(content: string): ParsedBlock[] {
   return blocks;
 }
 
+// Очищення жорстко закодованих чорних інлайн-стилів та псевдо-заголовків для гармонійного вигляду в темній і світлій темах
+function cleanHtmlForTheme(raw: string): string {
+  if (!raw) return '';
+  return raw
+    .replace(
+      /<p[^>]*>\s*<span[^>]*style="[^"]*font-size:\s*1\.45rem[^"]*"[^>]*>([\s\S]*?)<\/span>\s*<\/p>/gi,
+      '<h3>$1</h3>'
+    )
+    .replace(
+      /style="([^"]*?)color:\s*(?:rgb\(\s*23\s*,\s*23\s*,\s*23\s*\)|#171717|#0a0a0a|#000000|#1f2937|#262626|black)\s*;?([^"]*?)"/gi,
+      (match, before, after) => {
+        const remaining = `${before}${after}`.trim().replace(/^;\s*/, '').replace(/;\s*;+/g, ';');
+        return remaining ? `style="${remaining}"` : '';
+      }
+    );
+}
+
 export const ContentRenderer: React.FC<ContentRendererProps> = ({ content }) => {
   const [lightboxImg, setLightboxImg] = useState<{ src: string; caption?: string } | null>(null);
 
@@ -589,9 +602,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content }) => 
   const isHtml = /<(p|h[1-6]|table|blockquote|ul|ol|figure|div|mark|a)[^>]*>/i.test(content);
 
   if (isHtml) {
-    const processedHtml = markdownToHtml(content);
+    const processedHtml = cleanHtmlForTheme(markdownToHtml(content));
     return (
-      <div className="article-rendered-html space-y-6 text-neutral-800 leading-relaxed font-serif text-base sm:text-lg">
+      <div className="article-rendered-html space-y-6 text-neutral-800 dark:text-[#cbcbcb] leading-relaxed font-serif text-base sm:text-lg">
         <div
           dangerouslySetInnerHTML={{ __html: processedHtml }}
           onClick={(e) => {
@@ -646,10 +659,11 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content }) => 
     );
   }
 
-  const blocks = parseContentToBlocks(content);
+  const normalizedContent = cleanHtmlForTheme(content);
+  const blocks = parseContentToBlocks(normalizedContent);
 
   return (
-    <div className="space-y-6 text-neutral-800 leading-relaxed font-serif text-base sm:text-lg">
+    <div className="space-y-6 text-neutral-800 dark:text-[#cbcbcb] leading-relaxed font-serif text-base sm:text-lg">
       {blocks.map((block, idx) => {
         // 1. Заголовок
         if (block.type === 'heading') {
@@ -657,7 +671,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content }) => 
             return (
               <h2
                 key={idx}
-                className="text-2xl sm:text-3xl font-serif font-bold text-neutral-950 mt-10 mb-4 pt-4 border-t border-neutral-100 first:mt-0 first:pt-0 first:border-0"
+                className="text-2xl sm:text-3xl font-serif font-bold text-neutral-950 dark:text-[#f5f5f5] mt-10 mb-4 first:mt-0 border-none outline-none"
               >
                 {renderInlineFormatting(block.text)}
               </h2>
@@ -667,7 +681,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content }) => 
             return (
               <h3
                 key={idx}
-                className="text-xl sm:text-2xl font-serif font-semibold text-neutral-900 mt-8 mb-3"
+                className="text-xl sm:text-2xl font-serif font-semibold text-neutral-900 dark:text-[#ececec] mt-8 mb-3 border-none outline-none"
               >
                 {renderInlineFormatting(block.text)}
               </h3>
@@ -676,7 +690,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content }) => 
           return (
             <h4
               key={idx}
-              className="text-lg sm:text-xl font-serif font-medium text-neutral-800 mt-6 mb-2 text-neutral-700"
+              className="text-lg sm:text-xl font-serif font-medium text-neutral-800 dark:text-[#e0e0e0] mt-6 mb-2 border-none outline-none"
             >
               {renderInlineFormatting(block.text)}
             </h4>
@@ -687,9 +701,9 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content }) => 
         if (block.type === 'divider') {
           return (
             <div key={idx} className="my-8 flex items-center justify-center gap-2">
-              <span className="h-px w-16 bg-neutral-300"></span>
-              <span className="w-1.5 h-1.5 rounded-full bg-neutral-400"></span>
-              <span className="h-px w-16 bg-neutral-300"></span>
+              <span className="h-px w-16 bg-neutral-300 dark:bg-[#444444]"></span>
+              <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 dark:bg-[#666666]"></span>
+              <span className="h-px w-16 bg-neutral-300 dark:bg-[#444444]"></span>
             </div>
           );
         }
@@ -747,31 +761,35 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content }) => 
         if (block.type === 'table') {
           return (
             <div key={idx} className="my-8 overflow-x-auto not-italic">
-              <div className="inline-block min-w-full align-middle border border-neutral-200 rounded-lg overflow-hidden shadow-xs">
-                <table className="min-w-full divide-y divide-neutral-200 font-sans text-sm">
-                  <thead className="bg-neutral-100/80">
+              <div className="inline-block min-w-full align-middle border border-neutral-200 dark:border-[#333333] rounded-lg overflow-hidden shadow-xs">
+                <table className="min-w-full divide-y divide-neutral-200 dark:divide-[#333333] font-sans text-sm">
+                  <thead className="bg-neutral-100/80 dark:bg-[#161616]">
                     <tr>
                       {block.headers.map((h, hIdx) => (
                         <th
                           key={hIdx}
                           scope="col"
-                          className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-neutral-900 border-r border-neutral-200 last:border-r-0"
+                          className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-neutral-900 dark:text-[#f5f5f5] border-r border-neutral-200 dark:border-[#333333] last:border-r-0"
                         >
                           {renderInlineFormatting(h)}
                         </th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-neutral-200 bg-white">
+                  <tbody className="divide-y divide-neutral-200 dark:divide-[#333333] bg-white dark:bg-[#222222]">
                     {block.rows.map((row, rIdx) => (
                       <tr
                         key={rIdx}
-                        className={rIdx % 2 === 0 ? 'bg-white hover:bg-neutral-50' : 'bg-neutral-50/50 hover:bg-neutral-100/70'}
+                        className={
+                          rIdx % 2 === 0
+                            ? 'bg-white dark:bg-[#222222] hover:bg-neutral-50 dark:hover:bg-[#262626]'
+                            : 'bg-neutral-50/50 dark:bg-[#1c1c1c] hover:bg-neutral-100/70 dark:hover:bg-[#262626]'
+                        }
                       >
                         {row.map((cell, cIdx) => (
                           <td
                             key={cIdx}
-                            className="px-4 py-3 text-neutral-800 leading-normal border-r border-neutral-200 last:border-r-0"
+                            className="px-4 py-3 text-neutral-800 dark:text-[#cbcbcb] leading-normal border-r border-neutral-200 dark:border-[#333333] last:border-r-0"
                           >
                             {renderInlineFormatting(cell)}
                           </td>
@@ -858,11 +876,11 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content }) => 
           return (
             <blockquote
               key={idx}
-              className="my-8 pl-5 sm:pl-7 border-l-3 border-black italic text-neutral-900 font-serif text-lg sm:text-xl leading-relaxed"
+              className="my-8 pl-5 sm:pl-7 border-l-3 border-black dark:border-[#cbcbcb] italic text-neutral-900 dark:text-[#e0e0e0] font-serif text-lg sm:text-xl leading-relaxed"
             >
               <p>«{renderInlineFormatting(block.text)}»</p>
               {block.author && (
-                <footer className="not-italic text-xs font-sans text-neutral-500 mt-2 font-medium">
+                <footer className="not-italic text-xs font-sans text-neutral-500 dark:text-[#888888] mt-2 font-medium">
                   — {block.author}
                 </footer>
               )}
@@ -874,7 +892,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content }) => 
         if (block.type === 'list') {
           if (block.ordered) {
             return (
-              <ol key={idx} className="my-5 pl-6 list-decimal space-y-2 font-serif">
+              <ol key={idx} className="my-5 pl-6 list-decimal space-y-2 font-serif text-neutral-800 dark:text-[#cbcbcb]">
                 {block.items.map((it, iIdx) => (
                   <li key={iIdx} className="leading-relaxed">
                     {renderInlineFormatting(it)}
@@ -884,7 +902,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content }) => 
             );
           }
           return (
-            <ul key={idx} className="my-5 pl-6 list-disc space-y-2 font-serif">
+            <ul key={idx} className="my-5 pl-6 list-disc space-y-2 font-serif text-neutral-800 dark:text-[#cbcbcb]">
               {block.items.map((it, iIdx) => (
                 <li key={iIdx} className="leading-relaxed">
                   {renderInlineFormatting(it)}
@@ -908,8 +926,8 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content }) => 
                   <span
                     className={
                       item.checked
-                        ? 'line-through text-neutral-500'
-                        : 'text-neutral-800'
+                        ? 'line-through text-neutral-400 dark:text-neutral-500'
+                        : 'text-neutral-800 dark:text-[#cbcbcb]'
                     }
                   >
                     {renderInlineFormatting(item.text)}
@@ -929,7 +947,7 @@ export const ContentRenderer: React.FC<ContentRendererProps> = ({ content }) => 
             : 'text-left';
 
         return (
-          <p key={idx} className={`whitespace-pre-line leading-relaxed ${alignClass}`}>
+          <p key={idx} className={`whitespace-pre-line leading-relaxed text-neutral-800 dark:text-[#cbcbcb] ${alignClass}`}>
             {renderInlineFormatting(block.text)}
           </p>
         );

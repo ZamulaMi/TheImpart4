@@ -178,7 +178,7 @@ export const ArticleView: React.FC<ArticleViewProps> = ({
       )}
 
       {/* Рендеринг тексту з медіа */}
-      <div className="prose prose-neutral max-w-none text-base sm:text-lg leading-relaxed text-neutral-800 dark:text-[#cbcbcb]">
+      <div className="prose prose-neutral dark:prose-invert max-w-none text-base sm:text-lg leading-relaxed text-neutral-800 dark:text-[#cbcbcb]">
         <ContentRenderer content={content} />
       </div>
 

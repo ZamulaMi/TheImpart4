@@ -466,6 +466,37 @@ export default function App() {
     return DEFAULT_SOCIAL_LINKS;
   });
 
+// Очищення застарілих жорстких інлайн-кольорів у збережених сторінках
+const sanitizePageContent = (raw?: string): string => {
+  if (!raw) return '';
+  return raw
+    .replace(
+      /<p[^>]*>\s*<span[^>]*style="[^"]*font-size:\s*1\.45rem[^"]*"[^>]*>([\s\S]*?)<\/span>\s*<\/p>/gi,
+      '<h3>$1</h3>'
+    )
+    .replace(
+      /style="([^"]*?)color:\s*(?:rgb\(\s*23\s*,\s*23\s*,\s*23\s*\)|#171717|#0a0a0a|#000000|#1f2937|#262626|black)\s*;?([^"]*?)"/gi,
+      (match, before, after) => {
+        const remaining = `${before}${after}`.trim().replace(/^;\s*/, '').replace(/;\s*;+/g, ';');
+        return remaining ? `style="${remaining}"` : '';
+      }
+    );
+};
+
+const sanitizeStaticPages = (data: SitePagesData): SitePagesData => ({
+  ...data,
+  about: {
+    ...data.about,
+    content: sanitizePageContent(data.about?.content),
+    contentEn: sanitizePageContent(data.about?.contentEn),
+  },
+  contacts: {
+    ...data.contacts,
+    content: sanitizePageContent(data.contacts?.content),
+    contentEn: sanitizePageContent(data.contacts?.contentEn),
+  },
+});
+
   const [staticPages, setStaticPages] = useState<SitePagesData>(() => {
     if (typeof window !== 'undefined') {
       try {
@@ -473,10 +504,11 @@ export default function App() {
         if (saved) {
           const parsed = JSON.parse(saved);
           if (parsed && typeof parsed === 'object' && (parsed.about || parsed.contacts)) {
-            return {
+            const combined = {
               about: { ...DEFAULT_PAGES_DATA.about, ...(parsed.about || {}) },
               contacts: { ...DEFAULT_PAGES_DATA.contacts, ...(parsed.contacts || {}) },
             };
+            return sanitizeStaticPages(combined);
           }
         }
       } catch (e) {
@@ -490,12 +522,14 @@ export default function App() {
     try {
       const data = await fetchPagesFromCloud();
       if (data && typeof data === 'object' && (data.about || data.contacts)) {
-        setStaticPages({
+        const combined = {
           about: { ...DEFAULT_PAGES_DATA.about, ...(data.about || {}) },
           contacts: { ...DEFAULT_PAGES_DATA.contacts, ...(data.contacts || {}) },
-        });
+        };
+        const sanitized = sanitizeStaticPages(combined);
+        setStaticPages(sanitized);
         try {
-          localStorage.setItem(PAGES_STORAGE_KEY, JSON.stringify(data));
+          localStorage.setItem(PAGES_STORAGE_KEY, JSON.stringify(sanitized));
         } catch (e) {
           console.error(e);
         }

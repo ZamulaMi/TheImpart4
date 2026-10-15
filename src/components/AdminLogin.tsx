@@ -51,7 +51,7 @@ export const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess, onBackTo
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-900 flex flex-col justify-between selection:bg-neutral-900 selection:text-white light" data-theme="light">
+    <div className="min-h-screen bg-neutral-50 text-neutral-900 flex flex-col justify-between selection:bg-neutral-900 selection:text-white light admin-scope" data-theme="light">
       {/* Верхня панель */}
       <header className="px-6 sm:px-12 py-5 flex items-center justify-between border-b border-neutral-200/90 bg-white/90 backdrop-blur-md">
         <button

@@ -65,26 +65,26 @@ export const StaticPageView: React.FC<StaticPageViewProps> = ({
 
       {/* Основний контейнер сторінки */}
       <div className="w-[92%] sm:w-[90%] md:w-[calc(26/34*100%)] max-w-4xl mx-auto pt-10 sm:pt-16">
-        {/* Заголовна секція */}
-        <header className="mb-10 sm:mb-14">
-          <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-neutral-400 dark:text-[#777777] mb-3 font-sans">
+        {/* Заголовна секція: без рамок та темних фонових блоків */}
+        <div className="mb-10 sm:mb-14 bg-transparent border-0 ring-0 outline-none p-0">
+          <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-neutral-500 dark:text-[#a0a0a0] mb-3 font-sans">
             <span>The Impart</span>
             <span>•</span>
             <span>{isEn ? 'Editorial' : 'Редакція'}</span>
           </div>
 
           <h1
-            className="text-3xl sm:text-5xl md:text-6xl font-medium tracking-tight text-black dark:text-[#ffffff] leading-tight sm:leading-tight"
+            className="text-3xl sm:text-5xl md:text-6xl font-medium tracking-tight text-neutral-950 dark:text-[#f5f5f5] leading-tight sm:leading-tight border-none outline-none"
             style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
           >
             {title}
           </h1>
 
-          <div className="w-16 h-[2px] bg-black dark:bg-[#ffffff] mt-6 sm:mt-8" />
-        </header>
+          <div className="w-16 h-[2px] bg-black dark:bg-[#e5e5e5] mt-6 sm:mt-8" />
+        </div>
 
         {/* Текстовий зміст з багатим рендерером контенту */}
-        <div className="prose prose-neutral max-w-none text-neutral-800 dark:text-[#cbcbcb] text-base sm:text-lg leading-relaxed sm:leading-loose">
+        <div className="prose prose-neutral dark:prose-invert max-w-none text-neutral-800 dark:text-[#cbcbcb] text-base sm:text-lg leading-relaxed sm:leading-loose">
           <ContentRenderer content={content} />
         </div>
 

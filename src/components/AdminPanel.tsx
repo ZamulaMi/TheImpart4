@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   ArrowLeft,
   Plus,
@@ -620,40 +620,88 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     });
   };
 
-  const handleQuickCreateTopic = () => {
-    const clean = quickTopName.trim();
+  // Тимчасові / спеціальні теми, які створені для окремих статей і не входять до постійного каталогу
+  const oneOffTopics = useMemo(() => {
+    const globalNamesUa = new Set(
+      (taxonomies.topics || []).map((t) => t.name.trim().toLowerCase())
+    );
+    const map = new Map<string, { name: string; nameEn?: string; count: number }>();
+
+    articles.forEach((art) => {
+      if (Array.isArray(art.topics)) {
+        art.topics.forEach((t, idx) => {
+          const clean = t?.trim();
+          if (!clean) return;
+          const lower = clean.toLowerCase();
+          if (!globalNamesUa.has(lower)) {
+            const topEn = art.topicsEn && art.topicsEn[idx] ? art.topicsEn[idx].trim() : undefined;
+            const existing = map.get(lower);
+            if (existing) {
+              existing.count += 1;
+              if (!existing.nameEn && topEn) existing.nameEn = topEn;
+            } else {
+              map.set(lower, {
+                name: clean,
+                nameEn: topEn,
+                count: 1,
+              });
+            }
+          }
+        });
+      }
+    });
+
+    return Array.from(map.values());
+  }, [articles, taxonomies.topics]);
+
+  const handleQuickCreateTopic = (scope: 'this_article' | 'global' = 'this_article') => {
+    const clean = quickTopName.trim().replace(/^#+/, '');
     if (!clean) return;
-    let updatedTopics = [...taxonomies.topics];
-    if (!updatedTopics.some((t) => t.name.toLowerCase() === clean.toLowerCase())) {
-      const newTop = {
-        id: `top-${Date.now()}`,
-        name: clean,
-        nameEn: quickTopNameEn.trim() || undefined,
-      };
-      updatedTopics.push(newTop);
-      onSaveTaxonomies({
-        ...taxonomies,
-        topics: updatedTopics,
-      });
+    const cleanEn = quickTopNameEn.trim().replace(/^#+/, '');
+
+    // Якщо обрано збереження для всіх статей — додаємо у постійну таксономію тем
+    if (scope === 'global') {
+      let updatedTopics = [...taxonomies.topics];
+      if (!updatedTopics.some((t) => t.name.toLowerCase() === clean.toLowerCase())) {
+        const newTop = {
+          id: `top-${Date.now()}`,
+          name: clean,
+          nameEn: cleanEn || undefined,
+        };
+        updatedTopics.push(newTop);
+        onSaveTaxonomies({
+          ...taxonomies,
+          topics: updatedTopics,
+        });
+      }
     }
+
+    // Прив'язуємо тему до поточної статті (якщо scope === 'this_article', у каталог вона НЕ записується)
     setEditingArticle((prev) => {
       if (!prev) return prev;
       const current = prev.topics || [];
+      const currentEn = prev.topicsEn || [];
       if (!current.includes(clean)) {
         return {
           ...prev,
           topics: [...current, clean],
-          topicsEn: quickTopNameEn.trim()
-            ? [...(prev.topicsEn || []), quickTopNameEn.trim()]
+          topicsEn: cleanEn
+            ? [...currentEn, cleanEn]
             : prev.topicsEn,
         };
       }
       return prev;
     });
+
     setShowQuickCreateTop(false);
     setQuickTopName('');
     setQuickTopNameEn('');
-    showNotification(`Додано тему «${clean}»`);
+
+    if (scope === 'global') {
+      showNotification(`Постійну тему «#${clean}» створено для всіх статей (у каталозі)`);
+    } else {
+      showNotification(`Тему «#${clean}» додано тільки для цієї статті (без збереження в постійний каталог)`);
+    }
   };
 
   const handleToggleTopic = (topicName: string, topicNameEn?: string) => {
@@ -681,9 +729,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleRemoveTopic = (topicName: string) => {
     setEditingArticle((prev) => {
       if (!prev) return prev;
+      const idx = (prev.topics || []).indexOf(topicName);
+      const newTopics = (prev.topics || []).filter((t) => t !== topicName);
+      let newTopicsEn = prev.topicsEn || [];
+      if (idx !== -1 && Array.isArray(prev.topicsEn) && prev.topicsEn.length > idx) {
+        newTopicsEn = prev.topicsEn.filter((_, i) => i !== idx);
+      }
       return {
         ...prev,
-        topics: (prev.topics || []).filter((t) => t !== topicName),
+        topics: newTopics,
+        topicsEn: newTopicsEn,
+      };
+    });
+  };
+
+  const handleRemoveTopicEn = (topicNameEn: string) => {
+    setEditingArticle((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        topicsEn: (prev.topicsEn || []).filter((t) => t !== topicNameEn),
       };
     });
   };
@@ -1302,42 +1367,73 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     </div>
 
                     {showQuickCreateTop && (
-                      <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-lg space-y-2">
-                        <div className="text-xs font-medium text-black">Нова тема / тег</div>
+                      <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-lg space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs font-semibold text-black flex items-center gap-1.5">
+                            <Tag className="w-3.5 h-3.5 text-neutral-600" />
+                            <span>Створення нової теми</span>
+                          </div>
+                          <span className="text-[11px] text-neutral-400">
+                            Оберіть: лише для цієї статті чи в загальний каталог
+                          </span>
+                        </div>
+
                         <div className="flex flex-col sm:flex-row gap-2">
                           <input
                             type="text"
-                            placeholder="Назва теми (UA)..."
+                            placeholder="Назва теми (UA)... наприклад: Вибори-2026 або Apple-Event"
                             value={quickTopName}
                             onChange={(e) => setQuickTopName(e.target.value)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
-                                handleQuickCreateTopic();
+                                handleQuickCreateTopic('this_article');
                               }
                             }}
-                            className="w-full text-xs bg-white border border-neutral-200 px-3 py-1.5 rounded focus:outline-none focus:border-black"
+                            className="w-full text-xs bg-white border border-neutral-200 px-3 py-2 rounded focus:outline-none focus:border-black"
                           />
                           <input
                             type="text"
-                            placeholder="Topic name in EN..."
+                            placeholder="Topic name in EN (optional)..."
                             value={quickTopNameEn}
                             onChange={(e) => setQuickTopNameEn(e.target.value)}
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
-                                handleQuickCreateTopic();
+                                handleQuickCreateTopic('this_article');
                               }
                             }}
-                            className="w-full text-xs bg-white border border-neutral-200 px-3 py-1.5 rounded focus:outline-none focus:border-black"
+                            className="w-full text-xs bg-white border border-neutral-200 px-3 py-2 rounded focus:outline-none focus:border-black"
                           />
-                          <button
-                            type="button"
-                            onClick={handleQuickCreateTopic}
-                            className="px-3.5 py-1.5 bg-black text-white text-xs font-medium rounded hover:bg-neutral-800 shrink-0 cursor-pointer"
-                          >
-                            Додати тему
-                          </button>
+                        </div>
+
+                        {/* Дві дії створення теми: тільки для цієї статті або для всіх */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-neutral-200/60">
+                          <p className="text-[11px] text-neutral-500 leading-tight">
+                            💡 <span className="font-medium text-neutral-700">«Тільки для цієї статті»</span> відокремлює кілька статей з однієї актуальної події без збереження у постійний каталог.
+                          </p>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleQuickCreateTopic('this_article')}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900 text-white text-xs font-medium rounded hover:bg-black transition-colors cursor-pointer shadow-xs"
+                              title="Додати тему лише для цієї статті, без збереження у постійний каталог тем"
+                            >
+                              <FileText className="w-3.5 h-3.5 text-amber-300" />
+                              <span>Тільки для цієї статті</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleQuickCreateTopic('global')}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-neutral-800 border border-neutral-300 text-xs font-medium rounded hover:bg-neutral-100 transition-colors cursor-pointer"
+                              title="Створити постійну тему, яка збережеться у загальний каталог тем для всіх статей"
+                            >
+                              <Globe className="w-3.5 h-3.5 text-blue-500" />
+                              <span>Для всіх статей (у каталог)</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -1346,48 +1442,102 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     {editingArticle.topics && editingArticle.topics.length > 0 && (
                       <div className="flex flex-wrap gap-1.5 items-center">
                         <span className="text-[11px] text-neutral-400 mr-1">Обрані теми:</span>
-                        {editingArticle.topics.map((t) => (
-                          <span
-                            key={t}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-black text-white text-xs rounded-md shadow-xs"
-                          >
-                            <span>#{t}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveTopic(t)}
-                              className="hover:text-neutral-300 cursor-pointer"
-                              title="Прибрати зі статті"
+                        {editingArticle.topics.map((t) => {
+                          const isGlobal = taxonomies.topics.some(
+                            (gt) => gt.name.toLowerCase() === t.toLowerCase()
+                          );
+                          return (
+                            <span
+                              key={t}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md shadow-xs ${
+                                isGlobal
+                                  ? 'bg-black text-white'
+                                  : 'bg-neutral-800 text-white border border-neutral-600'
+                              }`}
                             >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </span>
-                        ))}
+                              <span>#{t}</span>
+                              {!isGlobal && (
+                                <span
+                                  className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-amber-400/20 text-amber-300 rounded font-normal"
+                                  title="Тема створена лише для цієї статті (не в постійному каталозі)"
+                                >
+                                  для цієї статті
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveTopic(t)}
+                                className="hover:text-neutral-300 cursor-pointer ml-0.5"
+                                title="Прибрати зі статті"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          );
+                        })}
                       </div>
                     )}
 
                     {/* Вибір тем з доступних */}
-                    <div className="flex flex-wrap gap-1.5 p-3 bg-neutral-50/70 border border-neutral-200/80 rounded-lg">
-                      <div className="w-full text-[11px] text-neutral-400 mb-1">
-                        Оберіть теми зі списку нижче:
+                    <div className="p-3 bg-neutral-50/70 border border-neutral-200/80 rounded-lg space-y-3">
+                      <div>
+                        <div className="text-[11px] text-neutral-400 mb-1.5 font-medium">
+                          Постійні теми (Каталог):
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {taxonomies.topics.map((top) => {
+                            const isAttached = editingArticle.topics?.includes(top.name);
+                            return (
+                              <button
+                                key={top.id}
+                                type="button"
+                                onClick={() => handleToggleTopic(top.name, top.nameEn)}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs transition-colors cursor-pointer ${
+                                  isAttached
+                                    ? 'bg-neutral-900 text-white font-medium shadow-xs'
+                                    : 'bg-white text-neutral-600 border border-neutral-200 hover:border-neutral-400 hover:text-black'
+                                }`}
+                              >
+                                {isAttached && <Check className="w-3 h-3 text-emerald-400" />}
+                                <span>#{top.name}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                      {taxonomies.topics.map((top) => {
-                        const isAttached = editingArticle.topics?.includes(top.name);
-                        return (
-                          <button
-                            key={top.id}
-                            type="button"
-                            onClick={() => handleToggleTopic(top.name, top.nameEn)}
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs transition-colors cursor-pointer ${
-                              isAttached
-                                ? 'bg-neutral-900 text-white font-medium shadow-xs'
-                                : 'bg-white text-neutral-600 border border-neutral-200 hover:border-neutral-400 hover:text-black'
-                            }`}
-                          >
-                            {isAttached && <Check className="w-3 h-3 text-emerald-400" />}
-                            <span>#{top.name}</span>
-                          </button>
-                        );
-                      })}
+
+                      {oneOffTopics.length > 0 && (
+                        <div className="pt-2 border-t border-neutral-200/70">
+                          <div className="text-[11px] text-neutral-400 mb-1.5 flex items-center justify-between">
+                            <span className="font-medium text-neutral-600">
+                              Теми з інших статей (тимчасові / для окремих матеріалів):
+                            </span>
+                            <span className="text-[10px] text-neutral-400">Натисніть для вибору</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {oneOffTopics.map((top) => {
+                              const isAttached = editingArticle.topics?.includes(top.name);
+                              return (
+                                <button
+                                  key={`oneoff_${top.name}`}
+                                  type="button"
+                                  onClick={() => handleToggleTopic(top.name, top.nameEn)}
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs transition-colors cursor-pointer ${
+                                    isAttached
+                                      ? 'bg-neutral-900 text-white font-medium shadow-xs'
+                                      : 'bg-amber-50/80 text-amber-900 border border-amber-200 hover:bg-amber-100 hover:border-amber-400'
+                                  }`}
+                                  title={`Тема використовується у ${top.count} статт${top.count === 1 ? 'і' : 'ях'}, не зберігається у загальний каталог`}
+                                >
+                                  {isAttached && <Check className="w-3 h-3 text-amber-400" />}
+                                  <span>#{top.name}</span>
+                                  <span className="text-[10px] opacity-60">({top.count})</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -1582,31 +1732,112 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <label className="block text-xs uppercase tracking-wider text-neutral-500">
                       Article Themes & Tags (EN)
                     </label>
-                    <div className="flex flex-wrap gap-1.5 p-3 bg-neutral-50/70 border border-neutral-200/80 rounded-lg">
-                      <div className="w-full text-[11px] text-neutral-400 mb-1">
-                        Select themes in English for international readers:
+
+                    {/* Обрані англійські теми */}
+                    {editingArticle.topicsEn && editingArticle.topicsEn.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 items-center">
+                        <span className="text-[11px] text-neutral-400 mr-1">Selected themes:</span>
+                        {editingArticle.topicsEn.map((t) => {
+                          const isGlobal = taxonomies.topics.some(
+                            (gt) => (gt.nameEn || gt.name).toLowerCase() === t.toLowerCase()
+                          );
+                          return (
+                            <span
+                              key={t}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md shadow-xs ${
+                                isGlobal
+                                  ? 'bg-black text-white'
+                                  : 'bg-neutral-800 text-white border border-neutral-600'
+                              }`}
+                            >
+                              <span>#{t}</span>
+                              {!isGlobal && (
+                                <span
+                                  className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 bg-amber-400/20 text-amber-300 rounded font-normal"
+                                  title="Theme created only for this article (not in permanent catalog)"
+                                >
+                                  for this article
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveTopicEn(t)}
+                                className="hover:text-neutral-300 cursor-pointer ml-0.5"
+                                title="Remove theme"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          );
+                        })}
                       </div>
-                      {taxonomies.topics.map((top) => {
-                        const topEnName = top.nameEn || top.name;
-                        const isAttached =
-                          editingArticle.topicsEn?.includes(topEnName) ||
-                          editingArticle.topics?.includes(top.name);
-                        return (
-                          <button
-                            key={top.id}
-                            type="button"
-                            onClick={() => handleToggleTopic(top.name, topEnName)}
-                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs transition-colors cursor-pointer ${
-                              isAttached
-                                ? 'bg-neutral-900 text-white font-medium shadow-xs'
-                                : 'bg-white text-neutral-600 border border-neutral-200 hover:border-neutral-400 hover:text-black'
-                            }`}
-                          >
-                            {isAttached && <Check className="w-3 h-3 text-emerald-400" />}
-                            <span>#{topEnName}</span>
-                          </button>
-                        );
-                      })}
+                    )}
+
+                    <div className="p-3 bg-neutral-50/70 border border-neutral-200/80 rounded-lg space-y-3">
+                      <div>
+                        <div className="text-[11px] text-neutral-400 mb-1.5 font-medium">
+                          Permanent Catalog Themes:
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {taxonomies.topics.map((top) => {
+                            const topEnName = top.nameEn || top.name;
+                            const isAttached =
+                              editingArticle.topicsEn?.includes(topEnName) ||
+                              editingArticle.topics?.includes(top.name);
+                            return (
+                              <button
+                                key={top.id}
+                                type="button"
+                                onClick={() => handleToggleTopic(top.name, topEnName)}
+                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs transition-colors cursor-pointer ${
+                                  isAttached
+                                    ? 'bg-neutral-900 text-white font-medium shadow-xs'
+                                    : 'bg-white text-neutral-600 border border-neutral-200 hover:border-neutral-400 hover:text-black'
+                                }`}
+                              >
+                                {isAttached && <Check className="w-3 h-3 text-emerald-400" />}
+                                <span>#{topEnName}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {oneOffTopics.length > 0 && (
+                        <div className="pt-2 border-t border-neutral-200/70">
+                          <div className="text-[11px] text-neutral-400 mb-1.5 flex items-center justify-between">
+                            <span className="font-medium text-neutral-600">
+                              One-off themes from other articles:
+                            </span>
+                            <span className="text-[10px] text-neutral-400">Click to attach</span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {oneOffTopics.map((top) => {
+                              const topEnName = top.nameEn || top.name;
+                              const isAttached =
+                                editingArticle.topicsEn?.includes(topEnName) ||
+                                editingArticle.topics?.includes(top.name);
+                              return (
+                                <button
+                                  key={`oneoff_en_${top.name}`}
+                                  type="button"
+                                  onClick={() => handleToggleTopic(top.name, topEnName)}
+                                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs transition-colors cursor-pointer ${
+                                    isAttached
+                                      ? 'bg-neutral-900 text-white font-medium shadow-xs'
+                                      : 'bg-amber-50/80 text-amber-900 border border-amber-200 hover:bg-amber-100 hover:border-amber-400'
+                                  }`}
+                                  title={`Used in ${top.count} article(s), not in permanent catalog`}
+                                >
+                                  {isAttached && <Check className="w-3 h-3 text-amber-400" />}
+                                  <span>#{topEnName}</span>
+                                  <span className="text-[10px] opacity-60">({top.count})</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -2106,10 +2337,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                             <div className="flex flex-wrap gap-1 mt-1.5">
                               {art.topics.map((t: any, idx: number) => {
                                 const topicStr = typeof t === 'string' ? t : t?.name || String(t);
+                                const isGlobal = taxonomies.topics.some(
+                                  (gt) => gt.name.toLowerCase() === topicStr.toLowerCase()
+                                );
                                 return (
                                   <span
                                     key={`${topicStr}_${idx}`}
-                                    className="text-[10px] text-neutral-500 bg-neutral-100 px-1.5 py-0.5 rounded"
+                                    className={`text-[10px] px-1.5 py-0.5 rounded ${
+                                      isGlobal
+                                        ? 'text-neutral-500 bg-neutral-100'
+                                        : 'text-amber-800 bg-amber-50 border border-amber-200/60'
+                                    }`}
+                                    title={
+                                      isGlobal
+                                        ? 'Тема з постійного каталогу'
+                                        : 'Тема створена лише для цієї статті'
+                                    }
                                   >
                                     #{topicStr}
                                   </span>

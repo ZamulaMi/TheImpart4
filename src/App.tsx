@@ -949,6 +949,18 @@ const sanitizeStaticPages = (data: SitePagesData): SitePagesData => ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleSelectTopicFromArticle = (topic: string) => {
+    setSelectedArticleId(null);
+    setActiveCategorySection(null);
+    setSearchPage(1);
+    setActiveSearchFilter({
+      query: topic,
+      articleIds: [],
+    });
+    window.history.pushState(null, '', `/search/${encodeURIComponent(topic)}`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleSelectArticle = (id: string | null) => {
     if (id) {
       window.history.pushState(null, '', `/article/${encodeURIComponent(id)}`);
@@ -1339,6 +1351,7 @@ const sanitizeStaticPages = (data: SitePagesData): SitePagesData => ({
               lang={siteLang}
               onBack={() => handleSelectArticle(null)}
               onSwitchLang={handleSetLang}
+              onSelectTopic={handleSelectTopicFromArticle}
             />
           ) : currentRoute === 'about' || currentRoute === 'contacts' ? (
             <StaticPageView

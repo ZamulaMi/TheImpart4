@@ -248,18 +248,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         : article.categoryEn
         ? article.categoryEn.split(',').map((c) => c.trim()).filter(Boolean)
         : [];
-    const initialTopics =
+    const initialTopics = (
       Array.isArray(article.topics)
-        ? [...article.topics]
+        ? article.topics
         : typeof (article as any).topics === 'string' && (article as any).topics.trim()
-        ? (article as any).topics.split(',').map((s: string) => s.trim().replace(/^#+/, '')).filter(Boolean)
-        : [];
-    const initialTopicsEn =
+        ? (article as any).topics.split(',')
+        : []
+    )
+      .map((s: any) => String(s).trim().replace(/^#+/, ''))
+      .filter(Boolean);
+    const initialTopicsEn = (
       Array.isArray(article.topicsEn)
-        ? [...article.topicsEn]
+        ? article.topicsEn
         : typeof (article as any).topicsEn === 'string' && (article as any).topicsEn.trim()
-        ? (article as any).topicsEn.split(',').map((s: string) => s.trim().replace(/^#+/, '')).filter(Boolean)
-        : [];
+        ? (article as any).topicsEn.split(',')
+        : []
+    )
+      .map((s: any) => String(s).trim().replace(/^#+/, ''))
+      .filter(Boolean);
 
     setEditingArticle({
       ...article,
@@ -283,26 +289,32 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       art.categories && art.categories.length > 0
         ? [...art.categories]
         : art.category
-        ? art.category.split(',').map((c) => c.trim()).filter(Boolean)
+        ? art.category.split(',').map((c: any) => c.trim()).filter(Boolean)
         : ['Загальне'];
     const initialCatsEn =
       art.categoriesEn && art.categoriesEn.length > 0
         ? [...art.categoriesEn]
         : art.categoryEn
-        ? art.categoryEn.split(',').map((c) => c.trim()).filter(Boolean)
+        ? art.categoryEn.split(',').map((c: any) => c.trim()).filter(Boolean)
         : [];
-    const initialTopics =
+    const initialTopics = (
       Array.isArray(art.topics)
-        ? [...art.topics]
+        ? art.topics
         : typeof (art as any).topics === 'string' && (art as any).topics.trim()
-        ? (art as any).topics.split(',').map((s: string) => s.trim().replace(/^#+/, '')).filter(Boolean)
-        : [];
-    const initialTopicsEn =
+        ? (art as any).topics.split(',')
+        : []
+    )
+      .map((s: any) => String(s).trim().replace(/^#+/, ''))
+      .filter(Boolean);
+    const initialTopicsEn = (
       Array.isArray(art.topicsEn)
-        ? [...art.topicsEn]
+        ? art.topicsEn
         : typeof (art as any).topicsEn === 'string' && (art as any).topicsEn.trim()
-        ? (art as any).topicsEn.split(',').map((s: string) => s.trim().replace(/^#+/, '')).filter(Boolean)
-        : [];
+        ? (art as any).topicsEn.split(',')
+        : []
+    )
+      .map((s: any) => String(s).trim().replace(/^#+/, ''))
+      .filter(Boolean);
 
     setEditingArticle({
       ...art,
@@ -710,7 +722,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     // Якщо обрано збереження для всіх статей — додаємо у постійну таксономію тем
     if (scope === 'global') {
       let updatedTopics = [...taxonomies.topics];
-      if (!updatedTopics.some((t) => t.name.toLowerCase() === clean.toLowerCase())) {
+      if (!updatedTopics.some((t) => t.name.trim().replace(/^#+/, '').toLowerCase() === clean.toLowerCase())) {
         const newTop = {
           id: `top-${Date.now()}`,
           name: clean,
@@ -724,13 +736,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       }
     }
 
-    // Прив'язуємо тему до поточної статті (якщо scope === 'this_article', у каталог вона НЕ записується)
+    // Прив'язуємо тему до поточної статті
     setEditingArticle((prev) => {
       if (!prev) return prev;
-      const current = Array.isArray(prev.topics) ? prev.topics : [];
-      const currentEn = Array.isArray(prev.topicsEn) ? prev.topicsEn : [];
-      const nextTopics = current.includes(clean) ? current : [...current, clean];
-      const nextTopicsEn = cleanEn && !currentEn.includes(cleanEn) ? [...currentEn, cleanEn] : currentEn;
+      const current = (Array.isArray(prev.topics) ? prev.topics : [])
+        .map((t) => String(t).trim().replace(/^#+/, ''))
+        .filter(Boolean);
+      const currentEn = (Array.isArray(prev.topicsEn) ? prev.topicsEn : [])
+        .map((t) => String(t).trim().replace(/^#+/, ''))
+        .filter(Boolean);
+
+      const nextTopics = current.some((t) => t.toLowerCase() === clean.toLowerCase())
+        ? current
+        : [...current, clean];
+      const nextTopicsEn = cleanEn && !currentEn.some((t) => t.toLowerCase() === cleanEn.toLowerCase())
+        ? [...currentEn, cleanEn]
+        : currentEn;
 
       return {
         ...prev,
@@ -744,42 +765,65 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     setQuickTopNameEn('');
 
     if (scope === 'global') {
-      showNotification(`Постійну тему «#${clean}» створено для всіх статей (у каталозі)`);
+      showNotification(`Постійну тему «#${clean}» додано до статті та збережено у каталог`);
     } else {
-      showNotification(`Тему «#${clean}» додано тільки для цієї статті (без збереження в постійний каталог)`);
+      showNotification(`Тему «#${clean}» прикріплено до цієї статті`);
     }
   };
 
   const handleToggleTopic = (topicName: string, topicNameEn?: string) => {
+    const cleanUa = topicName.trim().replace(/^#+/, '');
+    const cleanEn = topicNameEn ? topicNameEn.trim().replace(/^#+/, '') : undefined;
+    if (!cleanUa && !cleanEn) return;
+
     setEditingArticle((prev) => {
       if (!prev) return prev;
-      const current = Array.isArray(prev.topics) ? prev.topics : [];
-      const currentEn = Array.isArray(prev.topicsEn) ? prev.topicsEn : [];
-      const isAttached = current.includes(topicName) || (topicNameEn ? currentEn.includes(topicNameEn) : false);
+      const current = (Array.isArray(prev.topics) ? prev.topics : [])
+        .map((t) => String(t).trim().replace(/^#+/, ''))
+        .filter(Boolean);
+      const currentEn = (Array.isArray(prev.topicsEn) ? prev.topicsEn : [])
+        .map((t) => String(t).trim().replace(/^#+/, ''))
+        .filter(Boolean);
+
+      const isAttachedUa = cleanUa
+        ? current.some((t) => t.toLowerCase() === cleanUa.toLowerCase())
+        : false;
+      const isAttachedEn = cleanEn
+        ? currentEn.some((t) => t.toLowerCase() === cleanEn.toLowerCase())
+        : false;
+      const isAttached = isAttachedUa || isAttachedEn;
 
       if (isAttached) {
         return {
           ...prev,
-          topics: current.filter((t) => t !== topicName),
-          topicsEn: topicNameEn ? currentEn.filter((t) => t !== topicNameEn) : currentEn,
+          topics: cleanUa ? current.filter((t) => t.toLowerCase() !== cleanUa.toLowerCase()) : current,
+          topicsEn: cleanEn ? currentEn.filter((t) => t.toLowerCase() !== cleanEn.toLowerCase()) : currentEn,
         };
       } else {
+        const nextTopics = cleanUa && !isAttachedUa ? [...current, cleanUa] : current;
+        const nextTopicsEn = cleanEn && !isAttachedEn ? [...currentEn, cleanEn] : currentEn;
         return {
           ...prev,
-          topics: current.includes(topicName) ? current : [...current, topicName],
-          topicsEn: topicNameEn && !currentEn.includes(topicNameEn) ? [...currentEn, topicNameEn] : currentEn,
+          topics: nextTopics,
+          topicsEn: nextTopicsEn,
         };
       }
     });
   };
 
   const handleRemoveTopic = (topicName: string) => {
+    const clean = topicName.trim().replace(/^#+/, '').toLowerCase();
     setEditingArticle((prev) => {
       if (!prev) return prev;
-      const current = Array.isArray(prev.topics) ? prev.topics : [];
-      const currentEn = Array.isArray(prev.topicsEn) ? prev.topicsEn : [];
-      const idx = current.indexOf(topicName);
-      const newTopics = current.filter((t) => t !== topicName);
+      const current = (Array.isArray(prev.topics) ? prev.topics : [])
+        .map((t) => String(t).trim().replace(/^#+/, ''))
+        .filter(Boolean);
+      const currentEn = (Array.isArray(prev.topicsEn) ? prev.topicsEn : [])
+        .map((t) => String(t).trim().replace(/^#+/, ''))
+        .filter(Boolean);
+
+      const idx = current.findIndex((t) => t.toLowerCase() === clean);
+      const newTopics = current.filter((t) => t.toLowerCase() !== clean);
       let newTopicsEn = currentEn;
       if (idx !== -1 && currentEn.length > idx) {
         newTopicsEn = currentEn.filter((_, i) => i !== idx);
@@ -793,12 +837,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   };
 
   const handleRemoveTopicEn = (topicNameEn: string) => {
+    const clean = topicNameEn.trim().replace(/^#+/, '').toLowerCase();
     setEditingArticle((prev) => {
       if (!prev) return prev;
-      const currentEn = Array.isArray(prev.topicsEn) ? prev.topicsEn : [];
+      const currentEn = (Array.isArray(prev.topicsEn) ? prev.topicsEn : [])
+        .map((t) => String(t).trim().replace(/^#+/, ''))
+        .filter(Boolean);
       return {
         ...prev,
-        topicsEn: currentEn.filter((t) => t !== topicNameEn),
+        topicsEn: currentEn.filter((t) => t.toLowerCase() !== clean),
       };
     });
   };
@@ -1192,7 +1239,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       type="text"
                       placeholder="Ім'я автора"
                       value={editingArticle.author || ''}
-                      onChange={(e) => setEditingArticle({ ...editingArticle, author: e.target.value })}
+                      onChange={(e) => setEditingArticle((prev) => (prev ? { ...prev, author: e.target.value } : prev))}
                       className="w-full text-sm border-b border-neutral-200 pb-1.5 focus:border-black focus:outline-none transition-colors bg-transparent"
                     />
                   </div>
@@ -1223,7 +1270,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       type="url"
                       placeholder="https://images.unsplash.com/... або завантажте файл кнопкою вище"
                       value={editingArticle.coverImage || ''}
-                      onChange={(e) => setEditingArticle({ ...editingArticle, coverImage: e.target.value })}
+                      onChange={(e) => setEditingArticle((prev) => (prev ? { ...prev, coverImage: e.target.value } : prev))}
                       className="w-full text-sm border-b border-neutral-200 pb-1.5 focus:border-black focus:outline-none transition-colors bg-transparent font-mono text-xs"
                     />
                   </div>
@@ -1241,7 +1288,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     />
                     <button
                       type="button"
-                      onClick={() => setEditingArticle({ ...editingArticle, coverImage: '' })}
+                      onClick={() => setEditingArticle((prev) => (prev ? { ...prev, coverImage: '' } : prev))}
                       title="Видалити обкладинку"
                       className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-black text-white rounded-full transition-colors cursor-pointer"
                     >
@@ -1271,7 +1318,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       required
                       placeholder="Введіть заголовок статті українською..."
                       value={editingArticle.title || ''}
-                      onChange={(e) => setEditingArticle({ ...editingArticle, title: e.target.value })}
+                      onChange={(e) => setEditingArticle((prev) => (prev ? { ...prev, title: e.target.value } : prev))}
                       className="w-full text-lg sm:text-xl font-serif border-b border-neutral-200 pb-2 focus:border-black focus:outline-none transition-colors"
                     />
                   </div>
@@ -1536,7 +1583,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         </div>
                         <div className="flex flex-wrap gap-1.5">
                           {taxonomies.topics.map((top) => {
-                            const isAttached = editingArticle.topics?.includes(top.name);
+                            const isAttached = (editingArticle.topics || []).some(
+                              (t) => t.trim().replace(/^#+/, '').toLowerCase() === top.name.trim().replace(/^#+/, '').toLowerCase()
+                            );
                             return (
                               <button
                                 key={top.id}
@@ -1566,7 +1615,9 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           </div>
                           <div className="flex flex-wrap gap-1.5">
                             {oneOffTopics.map((top) => {
-                              const isAttached = editingArticle.topics?.includes(top.name);
+                              const isAttached = (editingArticle.topics || []).some(
+                                (t) => t.trim().replace(/^#+/, '').toLowerCase() === top.name.trim().replace(/^#+/, '').toLowerCase()
+                              );
                               return (
                                 <button
                                   key={`oneoff_${top.name}`}
@@ -1600,7 +1651,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       rows={2}
                       placeholder="Одне-два речення про головну думку статті українською..."
                       value={editingArticle.excerpt || ''}
-                      onChange={(e) => setEditingArticle({ ...editingArticle, excerpt: e.target.value })}
+                      onChange={(e) => setEditingArticle((prev) => (prev ? { ...prev, excerpt: e.target.value } : prev))}
                       className="w-full text-sm border border-neutral-200 p-3 focus:border-black focus:outline-none transition-colors resize-none"
                     />
                   </div>
@@ -1612,7 +1663,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     </label>
                     <RichArticleEditor
                       value={editingArticle.content || ''}
-                      onChange={(val) => setEditingArticle({ ...editingArticle, content: val })}
+                      onChange={(val) => setEditingArticle((prev) => (prev ? { ...prev, content: val } : prev))}
                       placeholder="Напишіть текст статті українською тут..."
                       lang="ua"
                       articleId={editingArticle.id || 'new'}
@@ -1628,7 +1679,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <button
                         type="button"
-                        onClick={() => setEditingArticle({ ...editingArticle, published: true })}
+                        onClick={() => setEditingArticle((prev) => (prev ? { ...prev, published: true } : prev))}
                         className={`p-3.5 border text-left rounded transition-all cursor-pointer flex items-start gap-3 ${
                           editingArticle.published !== false
                             ? 'border-black bg-neutral-50 ring-1 ring-black'
@@ -1646,7 +1697,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => setEditingArticle({ ...editingArticle, published: false })}
+                        onClick={() => setEditingArticle((prev) => (prev ? { ...prev, published: false } : prev))}
                         className={`p-3.5 border text-left rounded transition-all cursor-pointer flex items-start gap-3 ${
                           editingArticle.published === false
                             ? 'border-black bg-neutral-50 ring-1 ring-black'
@@ -1702,7 +1753,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       type="text"
                       placeholder="Enter article title in English..."
                       value={editingArticle.titleEn || ''}
-                      onChange={(e) => setEditingArticle({ ...editingArticle, titleEn: e.target.value })}
+                      onChange={(e) => setEditingArticle((prev) => (prev ? { ...prev, titleEn: e.target.value } : prev))}
                       className="w-full text-lg sm:text-xl font-serif border-b border-neutral-200 pb-2 focus:border-black focus:outline-none transition-colors"
                     />
                   </div>
@@ -1911,10 +1962,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         </div>
                         <div className="flex flex-wrap gap-1.5">
                           {taxonomies.topics.map((top) => {
-                            const topEnName = top.nameEn || top.name;
+                            const topEnName = (top.nameEn || top.name).trim().replace(/^#+/, '');
+                            const topUaName = top.name.trim().replace(/^#+/, '');
                             const isAttached =
-                              editingArticle.topicsEn?.includes(topEnName) ||
-                              editingArticle.topics?.includes(top.name);
+                              (editingArticle.topicsEn || []).some((t) => t.trim().replace(/^#+/, '').toLowerCase() === topEnName.toLowerCase()) ||
+                              (editingArticle.topics || []).some((t) => t.trim().replace(/^#+/, '').toLowerCase() === topUaName.toLowerCase());
                             return (
                               <button
                                 key={top.id}
@@ -1944,10 +1996,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           </div>
                           <div className="flex flex-wrap gap-1.5">
                             {oneOffTopics.map((top) => {
-                              const topEnName = top.nameEn || top.name;
+                              const topEnName = (top.nameEn || top.name).trim().replace(/^#+/, '');
+                              const topUaName = top.name.trim().replace(/^#+/, '');
                               const isAttached =
-                                editingArticle.topicsEn?.includes(topEnName) ||
-                                editingArticle.topics?.includes(top.name);
+                                (editingArticle.topicsEn || []).some((t) => t.trim().replace(/^#+/, '').toLowerCase() === topEnName.toLowerCase()) ||
+                                (editingArticle.topics || []).some((t) => t.trim().replace(/^#+/, '').toLowerCase() === topUaName.toLowerCase());
                               return (
                                 <button
                                   key={`oneoff_en_${top.name}`}
@@ -1981,7 +2034,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       rows={2}
                       placeholder="One or two sentences summarizing the article in English..."
                       value={editingArticle.excerptEn || ''}
-                      onChange={(e) => setEditingArticle({ ...editingArticle, excerptEn: e.target.value })}
+                      onChange={(e) => setEditingArticle((prev) => (prev ? { ...prev, excerptEn: e.target.value } : prev))}
                       className="w-full text-sm border border-neutral-200 p-3 focus:border-black focus:outline-none transition-colors resize-none"
                     />
                   </div>
@@ -1993,7 +2046,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     </label>
                     <RichArticleEditor
                       value={editingArticle.contentEn || ''}
-                      onChange={(val) => setEditingArticle({ ...editingArticle, contentEn: val })}
+                      onChange={(val) => setEditingArticle((prev) => (prev ? { ...prev, contentEn: val } : prev))}
                       placeholder="Write English article content here..."
                       lang="en"
                       articleId={editingArticle.id || 'new'}
@@ -2009,7 +2062,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <button
                         type="button"
-                        onClick={() => setEditingArticle({ ...editingArticle, publishedEn: true })}
+                        onClick={() => setEditingArticle((prev) => (prev ? { ...prev, publishedEn: true } : prev))}
                         className={`p-3.5 border text-left rounded transition-all cursor-pointer flex items-start gap-3 ${
                           editingArticle.publishedEn === true
                             ? 'border-black bg-neutral-50 ring-1 ring-black'
@@ -2027,7 +2080,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => setEditingArticle({ ...editingArticle, publishedEn: false })}
+                        onClick={() => setEditingArticle((prev) => (prev ? { ...prev, publishedEn: false } : prev))}
                         className={`p-3.5 border text-left rounded transition-all cursor-pointer flex items-start gap-3 ${
                           editingArticle.publishedEn !== true
                             ? 'border-black bg-neutral-50 ring-1 ring-black'

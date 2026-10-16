@@ -83,6 +83,22 @@ if (!initialArticlesFromFile) {
   writeArticlesToFile(inMemoryArticles);
 }
 
+function parseJsonArray(val: any): string[] | undefined {
+  if (!val) return undefined;
+  if (Array.isArray(val)) return val.map((s) => String(s).trim().replace(/^#+/, '')).filter(Boolean);
+  if (typeof val === 'string' && val.trim()) {
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed)) {
+        return parsed.map((s) => String(s).trim().replace(/^#+/, '')).filter(Boolean);
+      }
+    } catch {
+      return val.split(',').map((s) => s.trim().replace(/^#+/, '')).filter(Boolean);
+    }
+  }
+  return undefined;
+}
+
 let isTableInitialized = false;
 
 export async function initDb() {
@@ -111,15 +127,25 @@ export async function initDb() {
       await sql`ALTER TABLE articles ADD COLUMN IF NOT EXISTS content_en TEXT;`;
       await sql`ALTER TABLE articles ADD COLUMN IF NOT EXISTS category_en VARCHAR(100);`;
       await sql`ALTER TABLE articles ADD COLUMN IF NOT EXISTS published_en BOOLEAN DEFAULT false;`;
+      await sql`ALTER TABLE articles ADD COLUMN IF NOT EXISTS categories TEXT;`;
+      await sql`ALTER TABLE articles ADD COLUMN IF NOT EXISTS categories_en TEXT;`;
+      await sql`ALTER TABLE articles ADD COLUMN IF NOT EXISTS topics TEXT;`;
+      await sql`ALTER TABLE articles ADD COLUMN IF NOT EXISTS topics_en TEXT;`;
 
       const rows = await sql`SELECT count(*) as count FROM articles;`;
       if (parseInt(rows[0]?.count || '0', 10) === 0) {
         const toSeed = inMemoryArticles.length > 0 ? inMemoryArticles : DEFAULT_ARTICLES;
         for (const a of toSeed) {
+          const catsJson = JSON.stringify(a.categories || (a.category ? [a.category] : ['Загальне']));
+          const catsEnJson = a.categoriesEn ? JSON.stringify(a.categoriesEn) : (a.categoryEn ? JSON.stringify([a.categoryEn]) : null);
+          const topJson = a.topics && a.topics.length > 0 ? JSON.stringify(a.topics) : '[]';
+          const topEnJson = a.topicsEn && a.topicsEn.length > 0 ? JSON.stringify(a.topicsEn) : '[]';
+
           await sql`
             INSERT INTO articles (
               id, title, excerpt, content, category, author, cover_image, date, read_time, published,
-              title_en, excerpt_en, content_en, category_en, published_en
+              title_en, excerpt_en, content_en, category_en, published_en,
+              categories, categories_en, topics, topics_en
             )
             VALUES (
               ${a.id}, 
@@ -136,7 +162,11 @@ export async function initDb() {
               ${a.excerptEn || null},
               ${a.contentEn || null},
               ${a.categoryEn || null},
-              ${a.publishedEn ?? false}
+              ${a.publishedEn ?? false},
+              ${catsJson},
+              ${catsEnJson},
+              ${topJson},
+              ${topEnJson}
             )
             ON CONFLICT (id) DO NOTHING;
           `;
@@ -171,7 +201,11 @@ export async function getArticles(): Promise<Article[]> {
           excerpt_en as "excerptEn",
           content_en as "contentEn",
           category_en as "categoryEn",
-          published_en as "publishedEn"
+          published_en as "publishedEn",
+          categories,
+          categories_en as "categoriesEn",
+          topics,
+          topics_en as "topicsEn"
         FROM articles 
         ORDER BY created_at DESC;
       `;
@@ -184,6 +218,8 @@ export async function getArticles(): Promise<Article[]> {
         excerpt: String(r.excerpt || ''),
         content: String(r.content || ''),
         category: String(r.category || 'Загальне'),
+        categories: parseJsonArray(r.categories) || (r.category ? r.category.split(',').map((s: string) => s.trim()).filter(Boolean) : ['Загальне']),
+        topics: parseJsonArray(r.topics) || [],
         author: String(r.author || 'Редакція The Impart'),
         coverImage: r.coverImage || undefined,
         date: String(r.date || ''),
@@ -194,6 +230,8 @@ export async function getArticles(): Promise<Article[]> {
         excerptEn: r.excerptEn ? String(r.excerptEn) : undefined,
         contentEn: r.contentEn ? String(r.contentEn) : undefined,
         categoryEn: r.categoryEn ? String(r.categoryEn) : undefined,
+        categoriesEn: parseJsonArray(r.categoriesEn) || (r.categoryEn ? r.categoryEn.split(',').map((s: string) => s.trim()).filter(Boolean) : undefined),
+        topicsEn: parseJsonArray(r.topicsEn) || [],
         publishedEn: r.publishedEn === true || String(r.publishedEn) === 'true' || r.publishedEn === 1,
       }));
 
@@ -236,16 +274,16 @@ export async function saveArticle(article: Article): Promise<Article> {
 
   const categories = Array.isArray(article.categories) && article.categories.length > 0
     ? article.categories.map((c) => String(c).trim()).filter(Boolean)
-    : (category ? [category] : []);
+    : (category ? [category] : ['Загальне']);
   const categoriesEn = Array.isArray(article.categoriesEn) && article.categoriesEn.length > 0
     ? article.categoriesEn.map((c) => String(c).trim()).filter(Boolean)
     : (categoryEn ? [categoryEn] : []);
   const topics = Array.isArray(article.topics)
-    ? article.topics.map((t) => String(t).trim()).filter(Boolean)
-    : undefined;
+    ? article.topics.map((t) => String(t).trim().replace(/^#+/, '')).filter(Boolean)
+    : [];
   const topicsEn = Array.isArray(article.topicsEn)
-    ? article.topicsEn.map((t) => String(t).trim()).filter(Boolean)
-    : undefined;
+    ? article.topicsEn.map((t) => String(t).trim().replace(/^#+/, '')).filter(Boolean)
+    : [];
 
   const fullArticle: Article = {
     id,
@@ -264,8 +302,8 @@ export async function saveArticle(article: Article): Promise<Article> {
     titleEn,
     excerptEn,
     contentEn,
-    categoryEn: categoriesEn.join(', ') || categoryEn,
-    categoriesEn,
+    categoryEn: categoriesEn.length > 0 ? categoriesEn.join(', ') : categoryEn,
+    categoriesEn: categoriesEn.length > 0 ? categoriesEn : undefined,
     topicsEn,
     publishedEn: isPubEn,
   };
@@ -284,11 +322,17 @@ export async function saveArticle(article: Article): Promise<Article> {
   // 3. Синхронізуємо з Neon PostgreSQL з безпечним тайм-аутом
   try {
     await initDb();
+    const categoriesJson = JSON.stringify(categories);
+    const categoriesEnJson = categoriesEn.length > 0 ? JSON.stringify(categoriesEn) : null;
+    const topicsJson = JSON.stringify(topics);
+    const topicsEnJson = JSON.stringify(topicsEn);
+
     await safeExecuteSql(async (sql) => {
       await sql`
         INSERT INTO articles (
           id, title, excerpt, content, category, author, cover_image, date, read_time, published,
-          title_en, excerpt_en, content_en, category_en, published_en
+          title_en, excerpt_en, content_en, category_en, published_en,
+          categories, categories_en, topics, topics_en
         )
         VALUES (
           ${id}, 
@@ -305,7 +349,11 @@ export async function saveArticle(article: Article): Promise<Article> {
           ${excerptEn || null},
           ${contentEn || null},
           ${categoryEn || null},
-          ${isPubEn}
+          ${isPubEn},
+          ${categoriesJson},
+          ${categoriesEnJson},
+          ${topicsJson},
+          ${topicsEnJson}
         )
         ON CONFLICT (id) DO UPDATE SET
           title = EXCLUDED.title,
@@ -321,7 +369,11 @@ export async function saveArticle(article: Article): Promise<Article> {
           excerpt_en = EXCLUDED.excerpt_en,
           content_en = EXCLUDED.content_en,
           category_en = EXCLUDED.category_en,
-          published_en = EXCLUDED.published_en;
+          published_en = EXCLUDED.published_en,
+          categories = EXCLUDED.categories,
+          categories_en = EXCLUDED.categories_en,
+          topics = EXCLUDED.topics,
+          topics_en = EXCLUDED.topics_en;
       `;
     }, 3500);
   } catch (error: any) {
@@ -400,6 +452,8 @@ export default async function handler(req: any, res: any) {
         excerpt: body.excerpt ? String(body.excerpt).trim() : '',
         content: body.content ? String(body.content).trim() : '',
         category: body.category ? String(body.category).trim() : 'Загальне',
+        categories: parseJsonArray(body.categories) || (body.category ? body.category.split(',').map((s: string) => s.trim()).filter(Boolean) : ['Загальне']),
+        topics: parseJsonArray(body.topics) || [],
         author: body.author ? String(body.author).trim() : 'Редакція The Impart',
         coverImage: body.coverImage ? String(body.coverImage).trim() : undefined,
         date: body.date ? String(body.date) : new Date().toLocaleDateString('uk-UA', { day: 'numeric', month: 'long', year: 'numeric' }),
@@ -411,6 +465,8 @@ export default async function handler(req: any, res: any) {
         excerptEn: body.excerptEn ? String(body.excerptEn).trim() : undefined,
         contentEn: body.contentEn ? String(body.contentEn).trim() : undefined,
         categoryEn: body.categoryEn ? String(body.categoryEn).trim() : undefined,
+        categoriesEn: parseJsonArray(body.categoriesEn) || (body.categoryEn ? body.categoryEn.split(',').map((s: string) => s.trim()).filter(Boolean) : undefined),
+        topicsEn: parseJsonArray(body.topicsEn) || [],
         publishedEn: body.publishedEn === true || String(body.publishedEn) === 'true',
       });
 

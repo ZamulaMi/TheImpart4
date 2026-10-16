@@ -57,7 +57,7 @@ export const TaxonomyManager: React.FC<TaxonomyManagerProps> = ({
         (c) => c.name.toLowerCase() === cleanName.toLowerCase()
       )
     ) {
-      alert('Рубрика з такою назвою вже існує');
+      showNotification('Рубрика з такою назвою вже існує');
       return;
     }
 
@@ -80,20 +80,12 @@ export const TaxonomyManager: React.FC<TaxonomyManagerProps> = ({
 
   // Видалення рубрики
   const handleDeleteCategory = (id: string, name: string) => {
-    const count = getCategoryCount(name);
-    const confirmMsg =
-      count > 0
-        ? `Рубрика «${name}» використовується у ${count} статтях. Ви впевнені, що хочете її видалити зі списку доступних рубрик?`
-        : `Видалити рубрику «${name}»?`;
-
-    if (window.confirm(confirmMsg)) {
-      const updated: TaxonomiesData = {
-        categories: safeCategories.filter((c) => c.id !== id),
-        topics: safeTopics,
-      };
-      onSaveTaxonomies(updated);
-      showNotification(`Рубрику «${name}» видалено`);
-    }
+    const updated: TaxonomiesData = {
+      categories: safeCategories.filter((c) => c.id !== id),
+      topics: safeTopics,
+    };
+    onSaveTaxonomies(updated);
+    showNotification(`Рубрику «${name}» видалено`);
   };
 
   // Додавання нової теми
@@ -107,7 +99,7 @@ export const TaxonomyManager: React.FC<TaxonomyManagerProps> = ({
         (t) => t.name.toLowerCase() === cleanName.toLowerCase()
       )
     ) {
-      alert('Тема з такою назвою вже існує');
+      showNotification('Тема з такою назвою вже існує');
       return;
     }
 
@@ -130,20 +122,12 @@ export const TaxonomyManager: React.FC<TaxonomyManagerProps> = ({
 
   // Видалення теми
   const handleDeleteTopic = (id: string, name: string) => {
-    const count = getTopicCount(name);
-    const confirmMsg =
-      count > 0
-        ? `Тема «${name}» використовується у ${count} статтях. Ви впевнені, що хочете її видалити зі списку?`
-        : `Видалити тему «${name}»?`;
-
-    if (window.confirm(confirmMsg)) {
-      const updated: TaxonomiesData = {
-        categories: safeCategories,
-        topics: safeTopics.filter((t) => t.id !== id),
-      };
-      onSaveTaxonomies(updated);
-      showNotification(`Тему «${name}» видалено`);
-    }
+    const updated: TaxonomiesData = {
+      categories: safeCategories,
+      topics: safeTopics.filter((t) => t.id !== id),
+    };
+    onSaveTaxonomies(updated);
+    showNotification(`Тему «${name}» видалено`);
   };
 
   return (

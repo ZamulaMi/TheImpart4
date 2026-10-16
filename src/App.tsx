@@ -44,6 +44,8 @@ import {
   deleteArticleFromCloud,
   fetchPagesFromCloud,
   savePagesToCloud,
+  fetchTaxonomiesFromCloud,
+  saveTaxonomiesToCloud,
 } from './services/db';
 import {
   fetchDraftsFromCloud,
@@ -553,9 +555,26 @@ const sanitizeStaticPages = (data: SitePagesData): SitePagesData => ({
 
   const [taxonomies, setTaxonomies] = useState<TaxonomiesData>(() => getStoredTaxonomies());
 
-  const handleSaveTaxonomies = (data: TaxonomiesData) => {
+  const handleSaveTaxonomies = async (data: TaxonomiesData) => {
     setTaxonomies(data);
     saveStoredTaxonomies(data);
+    try {
+      await saveTaxonomiesToCloud(data);
+    } catch (err) {
+      console.warn('Cloud save taxonomies notice:', err);
+    }
+  };
+
+  const fetchTaxonomiesFromDb = async () => {
+    try {
+      const cloudData = await fetchTaxonomiesFromCloud();
+      if (cloudData && Array.isArray(cloudData.categories) && Array.isArray(cloudData.topics)) {
+        setTaxonomies(cloudData);
+        saveStoredTaxonomies(cloudData);
+      }
+    } catch (err) {
+      console.warn('Fetch taxonomies notice:', err);
+    }
   };
 
   const [articles, setArticles] = useState<Article[]>(() => {
@@ -714,6 +733,16 @@ const sanitizeStaticPages = (data: SitePagesData): SitePagesData => ({
       .map((a): Article => ({
         ...a,
         id: String(a.id),
+        topics: Array.isArray(a.topics)
+          ? a.topics.map((t: any) => String(t).trim().replace(/^#+/, '')).filter(Boolean)
+          : typeof a.topics === 'string' && a.topics.trim()
+          ? a.topics.split(',').map((t: string) => t.trim().replace(/^#+/, '')).filter(Boolean)
+          : [],
+        topicsEn: Array.isArray(a.topicsEn)
+          ? a.topicsEn.map((t: any) => String(t).trim().replace(/^#+/, '')).filter(Boolean)
+          : typeof a.topicsEn === 'string' && a.topicsEn.trim()
+          ? a.topicsEn.split(',').map((t: string) => t.trim().replace(/^#+/, '')).filter(Boolean)
+          : [],
       }));
   };
 
@@ -786,11 +815,12 @@ const sanitizeStaticPages = (data: SitePagesData): SitePagesData => ({
     setIsLoading(false);
   };
 
-  // Завантаження статей, налаштувань та статичних сторінок із бази даних
+  // Завантаження статей, налаштувань, статичних сторінок та таксономій із бази даних
   useEffect(() => {
     fetchArticlesFromDb();
     fetchSocialLinksFromDb();
     fetchPagesFromDb();
+    fetchTaxonomiesFromDb();
   }, []);
 
   // Синхронізація з навігацією браузера (URL, popstate, hashchange)

@@ -248,11 +248,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         : article.categoryEn
         ? article.categoryEn.split(',').map((c) => c.trim()).filter(Boolean)
         : [];
+    const initialTopics =
+      Array.isArray(article.topics)
+        ? [...article.topics]
+        : typeof (article as any).topics === 'string' && (article as any).topics.trim()
+        ? (article as any).topics.split(',').map((s: string) => s.trim().replace(/^#+/, '')).filter(Boolean)
+        : [];
+    const initialTopicsEn =
+      Array.isArray(article.topicsEn)
+        ? [...article.topicsEn]
+        : typeof (article as any).topicsEn === 'string' && (article as any).topicsEn.trim()
+        ? (article as any).topicsEn.split(',').map((s: string) => s.trim().replace(/^#+/, '')).filter(Boolean)
+        : [];
 
     setEditingArticle({
       ...article,
       categories: initialCats,
       categoriesEn: initialCatsEn,
+      topics: initialTopics,
+      topicsEn: initialTopicsEn,
     });
   };
 
@@ -277,11 +291,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         : art.categoryEn
         ? art.categoryEn.split(',').map((c) => c.trim()).filter(Boolean)
         : [];
+    const initialTopics =
+      Array.isArray(art.topics)
+        ? [...art.topics]
+        : typeof (art as any).topics === 'string' && (art as any).topics.trim()
+        ? (art as any).topics.split(',').map((s: string) => s.trim().replace(/^#+/, '')).filter(Boolean)
+        : [];
+    const initialTopicsEn =
+      Array.isArray(art.topicsEn)
+        ? [...art.topicsEn]
+        : typeof (art as any).topicsEn === 'string' && (art as any).topicsEn.trim()
+        ? (art as any).topicsEn.split(',').map((s: string) => s.trim().replace(/^#+/, '')).filter(Boolean)
+        : [];
 
     setEditingArticle({
       ...art,
       categories: initialCats,
       categoriesEn: initialCatsEn,
+      topics: initialTopics,
+      topicsEn: initialTopicsEn,
     });
   };
 
@@ -351,7 +379,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingArticle || !editingArticle.title?.trim()) {
-      alert('Будь ласка, вкажіть заголовок статті для основної (української) версії.');
+      setErrorMsg('Будь ласка, вкажіть заголовок статті для основної (української) версії.');
       return;
     }
 
@@ -361,6 +389,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     const isPub = editingArticle.published !== false && String(editingArticle.published) !== 'false';
     const isPubEn =
       editingArticle.publishedEn === true || String(editingArticle.publishedEn) === 'true';
+
+    // Автоматично додаємо тему, якщо користувач ввів її в поле, але не натиснув кнопку
+    const finalTopics = Array.isArray(editingArticle.topics)
+      ? [...editingArticle.topics]
+      : [];
+    const finalTopicsEn = Array.isArray(editingArticle.topicsEn)
+      ? [...editingArticle.topicsEn]
+      : [];
+
+    const pendingTopic = quickTopName.trim().replace(/^#+/, '');
+    const pendingTopicEn = quickTopNameEn.trim().replace(/^#+/, '');
+    if (pendingTopic && !finalTopics.includes(pendingTopic)) {
+      finalTopics.push(pendingTopic);
+    }
+    if (pendingTopicEn && !finalTopicsEn.includes(pendingTopicEn)) {
+      finalTopicsEn.push(pendingTopicEn);
+    }
 
     const finalArticle: Article = {
       id: editingArticle.id || Date.now().toString(),
@@ -378,7 +423,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           : editingArticle.category
           ? [editingArticle.category.trim()]
           : ['Загальне'],
-      topics: editingArticle.topics || [],
+      topics: finalTopics,
       published: isPub,
       // Загальні метадані
       author: editingArticle.author?.trim() || 'Редакція The Impart',
@@ -399,7 +444,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           : editingArticle.categoryEn
           ? [editingArticle.categoryEn.trim()]
           : undefined,
-      topicsEn: editingArticle.topicsEn || [],
+      topicsEn: finalTopicsEn,
       publishedEn: isPubEn,
     };
 
@@ -655,9 +700,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   }, [articles, taxonomies.topics]);
 
   const handleQuickCreateTopic = (scope: 'this_article' | 'global' = 'this_article') => {
-    const clean = quickTopName.trim().replace(/^#+/, '');
-    if (!clean) return;
-    const cleanEn = quickTopNameEn.trim().replace(/^#+/, '');
+    const rawClean = quickTopName.trim().replace(/^#+/, '');
+    const rawCleanEn = quickTopNameEn.trim().replace(/^#+/, '');
+    if (!rawClean && !rawCleanEn) return;
+
+    const clean = rawClean || rawCleanEn;
+    const cleanEn = rawCleanEn || rawClean;
 
     // Якщо обрано збереження для всіх статей — додаємо у постійну таксономію тем
     if (scope === 'global') {
@@ -679,18 +727,16 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     // Прив'язуємо тему до поточної статті (якщо scope === 'this_article', у каталог вона НЕ записується)
     setEditingArticle((prev) => {
       if (!prev) return prev;
-      const current = prev.topics || [];
-      const currentEn = prev.topicsEn || [];
-      if (!current.includes(clean)) {
-        return {
-          ...prev,
-          topics: [...current, clean],
-          topicsEn: cleanEn
-            ? [...currentEn, cleanEn]
-            : prev.topicsEn,
-        };
-      }
-      return prev;
+      const current = Array.isArray(prev.topics) ? prev.topics : [];
+      const currentEn = Array.isArray(prev.topicsEn) ? prev.topicsEn : [];
+      const nextTopics = current.includes(clean) ? current : [...current, clean];
+      const nextTopicsEn = cleanEn && !currentEn.includes(cleanEn) ? [...currentEn, cleanEn] : currentEn;
+
+      return {
+        ...prev,
+        topics: nextTopics,
+        topicsEn: nextTopicsEn,
+      };
     });
 
     setShowQuickCreateTop(false);
@@ -707,10 +753,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleToggleTopic = (topicName: string, topicNameEn?: string) => {
     setEditingArticle((prev) => {
       if (!prev) return prev;
-      const current = prev.topics || [];
-      const currentEn = prev.topicsEn || [];
-      const exists = current.includes(topicName);
-      if (exists) {
+      const current = Array.isArray(prev.topics) ? prev.topics : [];
+      const currentEn = Array.isArray(prev.topicsEn) ? prev.topicsEn : [];
+      const isAttached = current.includes(topicName) || (topicNameEn ? currentEn.includes(topicNameEn) : false);
+
+      if (isAttached) {
         return {
           ...prev,
           topics: current.filter((t) => t !== topicName),
@@ -719,8 +766,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       } else {
         return {
           ...prev,
-          topics: [...current, topicName],
-          topicsEn: topicNameEn ? [...currentEn, topicNameEn] : currentEn,
+          topics: current.includes(topicName) ? current : [...current, topicName],
+          topicsEn: topicNameEn && !currentEn.includes(topicNameEn) ? [...currentEn, topicNameEn] : currentEn,
         };
       }
     });
@@ -729,11 +776,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleRemoveTopic = (topicName: string) => {
     setEditingArticle((prev) => {
       if (!prev) return prev;
-      const idx = (prev.topics || []).indexOf(topicName);
-      const newTopics = (prev.topics || []).filter((t) => t !== topicName);
-      let newTopicsEn = prev.topicsEn || [];
-      if (idx !== -1 && Array.isArray(prev.topicsEn) && prev.topicsEn.length > idx) {
-        newTopicsEn = prev.topicsEn.filter((_, i) => i !== idx);
+      const current = Array.isArray(prev.topics) ? prev.topics : [];
+      const currentEn = Array.isArray(prev.topicsEn) ? prev.topicsEn : [];
+      const idx = current.indexOf(topicName);
+      const newTopics = current.filter((t) => t !== topicName);
+      let newTopicsEn = currentEn;
+      if (idx !== -1 && currentEn.length > idx) {
+        newTopicsEn = currentEn.filter((_, i) => i !== idx);
       }
       return {
         ...prev,
@@ -746,9 +795,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleRemoveTopicEn = (topicNameEn: string) => {
     setEditingArticle((prev) => {
       if (!prev) return prev;
+      const currentEn = Array.isArray(prev.topicsEn) ? prev.topicsEn : [];
       return {
         ...prev,
-        topicsEn: (prev.topicsEn || []).filter((t) => t !== topicNameEn),
+        topicsEn: currentEn.filter((t) => t !== topicNameEn),
       };
     });
   };
@@ -1729,9 +1779,90 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
                   {/* Теми EN */}
                   <div className="space-y-3 pt-1">
-                    <label className="block text-xs uppercase tracking-wider text-neutral-500">
-                      Article Themes & Tags (EN)
-                    </label>
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs uppercase tracking-wider text-neutral-500">
+                        Article Themes & Tags (EN)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowQuickCreateTop(!showQuickCreateTop)}
+                        className="text-xs text-neutral-500 hover:text-black flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>{showQuickCreateTop ? 'Cancel' : 'Create new theme'}</span>
+                      </button>
+                    </div>
+
+                    {showQuickCreateTop && (
+                      <div className="p-4 bg-neutral-50 border border-neutral-200 rounded-lg space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs font-semibold text-black flex items-center gap-1.5">
+                            <Tag className="w-3.5 h-3.5 text-neutral-600" />
+                            <span>Create new theme</span>
+                          </div>
+                          <span className="text-[11px] text-neutral-400">
+                            Choose: only for this article or to global catalog
+                          </span>
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row gap-2">
+                          <input
+                            type="text"
+                            placeholder="Theme name in EN... e.g. Minimalism or Apple-Event"
+                            value={quickTopNameEn}
+                            onChange={(e) => setQuickTopNameEn(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleQuickCreateTopic('this_article');
+                              }
+                            }}
+                            className="w-full text-xs bg-white border border-neutral-200 px-3 py-2 rounded focus:outline-none focus:border-black"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Назва теми (UA, опціонально)..."
+                            value={quickTopName}
+                            onChange={(e) => setQuickTopName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleQuickCreateTopic('this_article');
+                              }
+                            }}
+                            className="w-full text-xs bg-white border border-neutral-200 px-3 py-2 rounded focus:outline-none focus:border-black"
+                          />
+                        </div>
+
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2 border-t border-neutral-200/60">
+                          <p className="text-[11px] text-neutral-500 leading-tight">
+                            💡 <span className="font-medium text-neutral-700">«Only for this article»</span> creates a topic for breaking/special news without saving to catalog.
+                          </p>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleQuickCreateTopic('this_article')}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-neutral-900 text-white text-xs font-medium rounded hover:bg-black transition-colors cursor-pointer shadow-xs"
+                              title="Attach theme only for this article"
+                            >
+                              <FileText className="w-3.5 h-3.5 text-amber-300" />
+                              <span>Only for this article</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleQuickCreateTopic('global')}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white text-neutral-800 border border-neutral-300 text-xs font-medium rounded hover:bg-neutral-100 transition-colors cursor-pointer"
+                              title="Save into permanent catalog for all articles"
+                            >
+                              <Globe className="w-3.5 h-3.5 text-blue-500" />
+                              <span>For all articles (catalog)</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Обрані англійські теми */}
                     {editingArticle.topicsEn && editingArticle.topicsEn.length > 0 && (
